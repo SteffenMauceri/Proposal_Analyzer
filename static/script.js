@@ -120,6 +120,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             // --- End auto-save questions ---
 
+            // --- Question Count Warning ---
+            const questionsCount = questionsContentToSave.split('\n').filter(line => line.trim()).length;
+            if (questionsCount > 10) {
+                const confirmMessage = `You have ${questionsCount} questions. This analysis will take approximately ${Math.ceil(questionsCount * 8 / 60)} minutes to complete.\n\nDo you want to continue?`;
+                if (!confirm(confirmMessage)) {
+                    if(analysisSpinner) analysisSpinner.style.display = 'none';
+                    return;
+                }
+            }
+            // --- End Question Count Warning ---
+
             // --- UI Reset for Analysis --- 
             if (analysisOutputPre) {
                 analysisOutputPre.textContent = ''; 
