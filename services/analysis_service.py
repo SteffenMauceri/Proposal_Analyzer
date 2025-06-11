@@ -212,23 +212,61 @@ class AnalysisService:
         if logger:
             logger.info(f"AnalysisService (blocking): Starting analysis with command: {' '.join(command)}")
         
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding='utf-8'
-        )
-
-        # Capture stdout and stderr with timeout to prevent hanging
-        try:
-            stdout_data, stderr_data = process.communicate(timeout=300)  # 5 minute timeout
-        except subprocess.TimeoutExpired:
-            process.kill()
-            stdout_data, stderr_data = process.communicate()
+        # First, test if main.py is accessible
+        main_py_path = self.project_root / "main.py"
+        if not main_py_path.exists():
+            error_msg = f"main.py not found at {main_py_path}"
             if logger:
-                logger.error("AnalysisService (blocking): Process timed out after 5 minutes")
-            return None, "Analysis timed out after 5 minutes. The analysis may be too complex or there may be an API issue."
+                logger.error(error_msg)
+            return None, error_msg
+        
+        # Test if we can run main.py --help
+        try:
+            test_command = ["python", str(main_py_path), "--help"]
+            if logger:
+                logger.info(f"Testing main.py accessibility with: {' '.join(test_command)}")
+            test_process = subprocess.run(test_command, capture_output=True, text=True, timeout=30)
+            if test_process.returncode != 0:
+                error_msg = f"main.py test failed. Return code: {test_process.returncode}, stderr: {test_process.stderr}"
+                if logger:
+                    logger.error(error_msg)
+                return None, error_msg
+            if logger:
+                logger.info("main.py accessibility test passed")
+        except Exception as e:
+            error_msg = f"Failed to test main.py accessibility: {str(e)}"
+            if logger:
+                logger.error(error_msg)
+            return None, error_msg
+        
+        try:
+            logger.info(f"AnalysisService: Creating subprocess with command: {command}")
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8'
+            )
+            logger.info(f"AnalysisService: Subprocess created with PID: {process.pid}")
+
+            # Capture stdout and stderr with timeout to prevent hanging
+            try:
+                logger.info("AnalysisService: Starting process.communicate() with 300s timeout")
+                stdout_data, stderr_data = process.communicate(timeout=300)  # 5 minute timeout
+                logger.info(f"AnalysisService: process.communicate() completed. Return code: {process.returncode}")
+            except subprocess.TimeoutExpired:
+                logger.error("AnalysisService: Process timed out, killing...")
+                process.kill()
+                stdout_data, stderr_data = process.communicate()
+                if logger:
+                    logger.error("AnalysisService (blocking): Process timed out after 5 minutes")
+                return None, "Analysis timed out after 5 minutes. The analysis may be too complex or there may be an API issue."
+        
+        except Exception as e:
+            if logger:
+                logger.error(f"AnalysisService: Exception while creating/running subprocess: {e}", exc_info=True)
+            return None, f"Failed to start analysis process: {str(e)}"
 
         if logger:
             logger.info(f"AnalysisService (blocking): main.py process finished with return code: {process.returncode}")
