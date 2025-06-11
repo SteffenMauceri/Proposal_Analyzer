@@ -176,6 +176,15 @@ def run_analysis():
             questions_file_path = temp_dir_path / "questions.txt"
             questions_file_path.write_text(questions_content, encoding='utf-8')
 
+        # Check if API key is available before proceeding
+        try:
+            from proposal_analyzer.config import get_api_key
+            api_key = get_api_key()
+            app.logger.info("API key successfully retrieved")
+        except ValueError as e:
+            app.logger.error(f"API key validation failed: {e}")
+            return jsonify(success=False, message=f"Configuration error: {str(e)}"), 500
+
         # For AnalysisService, proposals_dir_path is parent of proposal_file_path
         proposals_dir_path = proposal_file_path.parent
         selected_proposal_filenames = [proposal_file_path.name]
@@ -183,7 +192,12 @@ def run_analysis():
 
         def generate_stream_from_service():
             try:
-                stream_iterator = analysis_service.run_analysis_stream(
+                # Send initial status
+                yield f"data: {json.dumps({'type': 'log', 'message': 'Starting analysis...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Initializing analysis process...'}})}\n\n"
+                
+                # Use blocking analysis instead of streaming subprocess to avoid memory issues
+                analysis_results, error_message = analysis_service.run_analysis_blocking(
                     call_pdf_path=call_pdf_path,
                     proposals_dir_path=proposals_dir_path,
                     questions_file_path=questions_file_path,
@@ -194,11 +208,20 @@ def run_analysis():
                     spell_check_opt=spell_check_opt,
                     reviewer_feedback_opt=reviewer_feedback_opt
                 )
-                for event_string in stream_iterator:
-                    yield event_string
+                
+                if error_message:
+                    app.logger.error(f"Analysis failed: {error_message}")
+                    error_event = {"type": "error", "message": f"Analysis failed: {html.escape(error_message)}"}
+                    yield f"data: {json.dumps(error_event)}\n\n"
+                else:
+                    app.logger.info("Analysis completed successfully")
+                    yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Analysis completed, preparing results...'}})}\n\n"
+                    result_event = {"type": "result", "payload": analysis_results}
+                    yield f"data: {json.dumps(result_event)}\n\n"
+                    
             except Exception as e:
-                app.logger.error(f"Error during analysis stream: {e}", exc_info=True)
-                error_event = {"type": "error", "message": f"Stream generation failed: {html.escape(str(e))}"}
+                app.logger.error(f"Error during analysis: {e}", exc_info=True)
+                error_event = {"type": "error", "message": f"Analysis failed: {html.escape(str(e))}"}
                 yield f"data: {json.dumps(error_event)}\n\n"
             finally:
                 # IMPORTANT: Clean up the temporary directory

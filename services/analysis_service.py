@@ -220,8 +220,15 @@ class AnalysisService:
             encoding='utf-8'
         )
 
-        # Capture stdout and stderr
-        stdout_data, stderr_data = process.communicate()
+        # Capture stdout and stderr with timeout to prevent hanging
+        try:
+            stdout_data, stderr_data = process.communicate(timeout=300)  # 5 minute timeout
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout_data, stderr_data = process.communicate()
+            if logger:
+                logger.error("AnalysisService (blocking): Process timed out after 5 minutes")
+            return None, "Analysis timed out after 5 minutes. The analysis may be too complex or there may be an API issue."
 
         if logger:
             logger.info(f"AnalysisService (blocking): main.py process finished with return code: {process.returncode}")
