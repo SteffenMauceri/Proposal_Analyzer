@@ -83,20 +83,20 @@
                 <input type="hidden" id="questions-file-path" name="questions-file-path" value="">
 
                 <div class="form-group path-input-group compact-form-group">
-                    <label for="call_file_input" class="file-upload-label">Upload Call Doc</label>
-                    <input type="file" id="call_file_input" name="call_file_input" accept=".pdf,.doc,.docx" style="display: none;">
+                    <label for="call_pdf_upload_input" class="file-upload-label">Upload Call Doc</label>
+                    <input type="file" id="call_pdf_upload_input" name="call_pdf_upload_input" accept=".pdf,.doc,.docx" style="display: none;">
                     <span id="call_upload_status"></span>
                 </div>
 
                 <div class="form-group path-input-group compact-form-group">
-                    <label for="proposal_file_input" class="file-upload-label">Upload Proposal PDF</label>
-                    <input type="file" id="proposal_file_input" name="proposal_file_input" accept=".pdf" style="display: none;">
+                    <label for="proposal_file_upload_input" class="file-upload-label">Upload Proposal PDF</label>
+                    <input type="file" id="proposal_file_upload_input" name="proposal_file_upload_input" accept=".pdf" style="display: none;">
                     <span id="proposal_upload_status"></span>
                 </div>
                 
                 <div class="form-group path-input-group compact-form-group">
-                    <label for="questions_file_input_main" class="file-upload-label">Upload Questions.txt (Optional)</label>
-                    <input type="file" id="questions_file_input_main" name="questions_file_input_main" accept=".txt" style="display: none;">
+                    <label for="questions_upload_input" class="file-upload-label">Upload Questions.txt (Optional)</label>
+                    <input type="file" id="questions_upload_input" name="questions_upload_input" accept=".txt" style="display: none;">
                     <span id="questions_upload_status"></span>
                 </div>
             </section>
@@ -155,141 +155,94 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-    // Renamed proposals-dir-path to proposal-file-path-hidden for clarity
     document.addEventListener('DOMContentLoaded', function() {
-        const callFileInput = document.getElementById('call_file_input');
-        const callPdfPathInput = document.getElementById('call-pdf-path'); // Hidden input
-        const callUploadStatus = document.getElementById('call_upload_status');
+        // This script now only handles UI interactions not covered by the main script.js,
+        // such as triggering hidden file inputs and displaying selected filenames.
 
-        const proposalFileInput = document.getElementById('proposal_file_input');
-        const proposalFilePathHiddenInput = document.getElementById('proposal-file-path-hidden'); // Hidden input
-        const proposalUploadStatus = document.getElementById('proposal_upload_status');
+        function setupFileInput(buttonId, inputId, statusId) {
+            const button = document.getElementById(buttonId);
+            const input = document.getElementById(inputId);
+            const status = document.getElementById(statusId);
 
-        const questionsFileInput = document.getElementById('questions_file_input_main');
-        const questionsFilePathInput = document.getElementById('questions-file-path'); // Hidden input
-        const questionsUploadStatus = document.getElementById('questions_upload_status');
-        const questionsContentTextArea = document.getElementById('questions-content');
+            if (button && input && status) {
+                // The label acts as the button
+                button.addEventListener('click', () => input.click());
 
-        function setupFileUpload(fileInput, doctype, pathInputHidden, statusElement) {
-            if (!fileInput) {
-                console.warn(`File input for doctype ${doctype} not found. Upload functionality for it will not work.`);
-                return;
-            }
-
-            fileInput.addEventListener('change', async function(event) {
-                const file = event.target.files[0];
-                if (!file) {
-                    return;
-                }
-
-                statusElement.textContent = `Uploading ${file.name}...`;
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('doctype', doctype);
-
-                try {
-                    const response = await fetch('/upload_main_document', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const data = await response.json();
-
-                    if (data.success) {
-                        statusElement.textContent = `Uploaded: ${data.filename}`;
-                        pathInputHidden.value = data.filepath; // Update the hidden path input
-
-                        if (doctype === 'questions' && data.filepath) {
-                            // Attempt to load content into textarea if a questions file is uploaded
-                            fetch('/load_path_data', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({ path_type: 'questions_file', path_value: data.filepath })
-                            })
-                            .then(res => res.json())
-                            .then(qData => {
-                                if (qData.success && qData.questions_content) {
-                                    questionsContentTextArea.value = qData.questions_content;
-                                } else {
-                                    console.warn('Could not auto-load questions content after upload.');
-                                }
-                            }).catch(err => console.error('Error fetching uploaded questions content:', err));
-                        }
-
-                        // No longer need to call window.loadPathData for UI refresh of paths/lists here
-                        // as primary elements being updated are hidden or status messages.
-
+                input.addEventListener('change', () => {
+                    if (input.files.length > 0) {
+                        status.textContent = `Selected: ${input.files[0].name}`;
+                        status.style.color = 'green';
                     } else {
-                        statusElement.textContent = `Upload failed: ${data.message}`;
-                        alert(`Upload failed: ${data.message}`);
-                        pathInputHidden.value = ''; // Clear path if upload failed
+                        status.textContent = '';
                     }
-                } catch (error) {
-                    console.error('Error uploading file:', error);
-                    statusElement.textContent = 'Upload error. See console.';
-                    alert('Upload error. See console.');
-                    pathInputHidden.value = ''; // Clear path on error
-                }
-                event.target.value = null;
-            });
+                });
+            }
         }
 
-        setupFileUpload(callFileInput, 'call', callPdfPathInput, callUploadStatus);
-        setupFileUpload(proposalFileInput, 'proposal', proposalFilePathHiddenInput, proposalUploadStatus);
-        setupFileUpload(questionsFileInput, 'questions', questionsFilePathInput, questionsUploadStatus);
+        // We use the labels' `for` attribute to trigger the inputs, but if we wanted to use divs as buttons:
+        // setupFileInput('call-upload-button', 'call_pdf_upload_input', 'call_upload_status');
+        // Let's just update the status text based on the label clicks.
 
-        // Export PDF Button Logic (Adjusted)
+        document.getElementById('call_pdf_upload_input').addEventListener('change', function() {
+            const status = document.getElementById('call_upload_status');
+            if (this.files.length > 0) status.textContent = `Selected: ${this.files[0].name}`;
+        });
+        document.getElementById('proposal_file_upload_input').addEventListener('change', function() {
+            const status = document.getElementById('proposal_upload_status');
+            if (this.files.length > 0) status.textContent = `Selected: ${this.files[0].name}`;
+        });
+        document.getElementById('questions_upload_input').addEventListener('change', function() {
+            const status = document.getElementById('questions_upload_status');
+            if (this.files.length > 0) status.textContent = `Selected: ${this.files[0].name}`;
+        });
+
+
+        // Export PDF Button Logic
         const exportPdfButton = document.getElementById('export-pdf-btn');
         const exportStatus = document.getElementById('export-status');
         const downloadLinkContainer = document.getElementById('download-link-container');
 
         if (exportPdfButton) {
             exportPdfButton.addEventListener('click', async function() {
-                let analysisData = window.currentAnalysisJsonResultsForExport; // Get from global var
+                let analysisData = window.currentAnalysisJsonResultsForExport;
 
                 if (!analysisData) {
-                    exportStatus.textContent = 'No analysis data available to export. Run analysis first.';
-                    console.error("No analysis data found for PDF export (window.currentAnalysisJsonResultsForExport is null or undefined).");
+                    alert('No analysis data available to export.');
                     return;
                 }
 
                 exportStatus.textContent = 'Generating PDF...';
-                downloadLinkContainer.innerHTML = ''; // Clear previous link
-
                 try {
+                    const proposalFile = document.getElementById('proposal_file_upload_input').files[0];
+                    const proposalFilename = proposalFile ? proposalFile.name : 'report.pdf';
+
                     const response = await fetch('/export_pdf', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
                             analysis_data: analysisData,
-                            // Include the original proposal filename for naming the PDF
-                            // This needs to be sourced from when the proposal was uploaded/analyzed
-                            proposal_filename: document.getElementById('proposal-file-path-hidden').value.split(/[\\/]/).pop() // Get filename from path
-                        })
+                            proposal_filename: proposalFilename
+                        }),
                     });
+
                     const data = await response.json();
                     if (data.success) {
-                        exportStatus.textContent = `PDF report generated: ${data.filename_server}`;
-                        const downloadLink = document.createElement('a');
-                        downloadLink.href = `/download_export/${data.filename_server}`;
-                        downloadLink.textContent = `Download ${data.filename_server}`;
-                        downloadLink.setAttribute('download', data.filename_server);
-                        downloadLinkContainer.appendChild(downloadLink);
+                        exportStatus.textContent = 'PDF generated successfully!';
+                        const link = document.createElement('a');
+                        link.href = `/download_export/${data.filename_server}`;
+                        link.textContent = `Download ${data.filename_server}`;
+                        link.className = 'download-link';
+                        downloadLinkContainer.innerHTML = '';
+                        downloadLinkContainer.appendChild(link);
                     } else {
-                        exportStatus.textContent = `Error exporting PDF: ${data.message}`;
+                        exportStatus.textContent = `Error: ${data.message}`;
                     }
                 } catch (error) {
-                    console.error('Error during PDF export:', error);
-                    exportStatus.textContent = 'Error during PDF export. See console.';
+                    console.error('Error exporting PDF:', error);
+                    exportStatus.textContent = 'An error occurred during export.';
                 }
             });
         }
-
-        // ... (Your existing runAnalysisButton listener and other JS from script.js should be here
-        //      or in the linked script.js file. Ensure it uses the hidden input field values for paths.)
     });
     </script>
 </body>
