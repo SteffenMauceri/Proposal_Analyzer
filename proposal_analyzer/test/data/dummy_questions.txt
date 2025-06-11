@@ -1,0 +1,4 @@
+Is requirement A met?
+
+Does the proposal mention B?
+Is section C included? 

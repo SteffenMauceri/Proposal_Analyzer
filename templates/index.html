@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proposal Analyzer GUI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Add CDN for Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Add CDN for DOMPurify -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.3.6/dist/purify.min.js"></script>
+    <style>
+        /* ... existing styles ... */
+        .file-upload-label {
+            display: inline-block;
+            padding: 8px 12px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f8f8f8;
+            margin-left: 10px; /* Adjust as needed */
+        }
+        .file-upload-label:hover {
+            background-color: #e8e8e8;
+        }
+        #call_upload_status, #proposal_upload_status, #questions_upload_status {
+            margin-left: 10px;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+        .checkbox-label { /* Style for checkbox labels for better alignment and spacing */
+            display: flex;
+            align-items: center;
+            margin-right: 15px; /* Spacing between checkbox groups */
+        }
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 5px; /* Spacing between checkbox and its text */
+        }
+        pre.feedback-text { /* Style for preformatted text in feedback/summary sections */
+            white-space: pre-wrap;    /* Preserves whitespace and newlines, wraps text */
+            word-wrap: break-word;    /* Breaks words if necessary to prevent overflow */
+            max-width: 100%;          /* Ensures it doesn't overflow its container */
+            overflow-x: auto;         /* Adds scrollbar if content is still too wide (e.g. very long unbreakable string) */
+        }
+        .feedback-content {
+            white-space: normal; /* Allow normal HTML whitespace handling */
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+        .feedback-content h1, .feedback-content h2, .feedback-content h3, .feedback-content h4, .feedback-content h5, .feedback-content h6 {
+            margin-top: 0.8em;
+            margin-bottom: 0.4em;
+            font-weight: bold;
+        }
+        .feedback-content h4 { /* Example: if LLM generates H4 for sections like **Major Strengths** */
+            font-size: 1.1em; 
+        }
+        .feedback-content ul, .feedback-content ol {
+            margin-left: 20px;
+            margin-bottom: 1em;
+        }
+        .feedback-content li {
+            margin-bottom: 0.3em;
+        }
+        .feedback-content p {
+            margin-bottom: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Proposal Analyzer v0.1</h1>
+        </header>
+
+        <main>
+            <section id="config-paths-section" class="config-group">
+                <h2>1. Upload Files</h2>
+                <!-- Store paths in hidden fields after upload -->
+                <input type="hidden" id="call-pdf-path" name="call-pdf-path" value="">
+                <input type="hidden" id="proposal-file-path-hidden" name="proposal-file-path-hidden" value="">
+                <input type="hidden" id="questions-file-path" name="questions-file-path" value="">
+
+                <div class="form-group path-input-group compact-form-group">
+                    <label for="call_file_input" class="file-upload-label">Upload Call Doc</label>
+                    <input type="file" id="call_file_input" name="call_file_input" accept=".pdf,.doc,.docx" style="display: none;">
+                    <span id="call_upload_status"></span>
+                </div>
+
+                <div class="form-group path-input-group compact-form-group">
+                    <label for="proposal_file_input" class="file-upload-label">Upload Proposal PDF</label>
+                    <input type="file" id="proposal_file_input" name="proposal_file_input" accept=".pdf" style="display: none;">
+                    <span id="proposal_upload_status"></span>
+                </div>
+                
+                <div class="form-group path-input-group compact-form-group">
+                    <label for="questions_file_input_main" class="file-upload-label">Upload Questions.txt (Optional)</label>
+                    <input type="file" id="questions_file_input_main" name="questions_file_input_main" accept=".txt" style="display: none;">
+                    <span id="questions_upload_status"></span>
+                </div>
+            </section>
+            
+            <section id="analysis-options-section" class="config-group">
+                <h2>2. Select Analyses</h2>
+                <div class="form-group compact-form-group" style="display: flex; flex-wrap: wrap; gap: 15px;">
+                    <label for="analyze-proposal-opt" class="checkbox-label">
+                        <input type="checkbox" id="analyze-proposal-opt" name="analyze-proposal-opt" checked> Question Answering
+                    </label>
+                    <!-- <label for="spell-check-opt" class="checkbox-label">
+                        <input type="checkbox" id="spell-check-opt" name="spell-check-opt"> Spell & Grammar Check
+                    </label> -->
+                    <label for="reviewer-feedback-opt" class="checkbox-label">
+                        <input type="checkbox" id="reviewer-feedback-opt" name="reviewer-feedback-opt"> Expert Reviewer Feedback
+                    </label>
+                    <!-- <label for="nasa-pm-feedback-opt" class="checkbox-label">
+                        <input type="checkbox" id="nasa-pm-feedback-opt" name="nasa-pm-feedback-opt"> NASA PM Feedback
+                    </label> -->
+                </div>
+            </section>
+
+            <section id="questions-editor-section" class="config-group">
+                <h2>3. Edit Questions (Optional)</h2>
+                <p class="info-text">Edit content below. These questions will be used if a Questions.txt file is not uploaded or if you wish to override its content for this run. Content from an uploaded file will appear here.</p>
+                <textarea id="questions-content" rows="10">{{ questions_content }}</textarea>
+            </section>
+
+            <section id="run-analysis-section" class="config-group">
+                <h2>4. Run Analysis</h2>
+                <button id="run-analysis-btn">Run Analysis</button>
+                
+                <div id="progress-container" style="display: none; margin-top: 15px;">
+                    <label for="analysis-progress-bar" id="progress-bar-label">Progress:</label>
+                    <progress id="analysis-progress-bar" value="0" max="100" style="width: 100%;"></progress>
+                </div>
+
+                <div class="spinner" id="analysis-spinner" style="display: none;"></div>
+            </section>
+
+            <section id="results-section">
+                <h2>Analysis Results</h2>
+                <div id="analysis-output" style="background-color: #f0f0f0; border: 1px solid #ccc; padding: 10px; white-space: pre-wrap; word-wrap: break-word; max-height: none;"></div>
+                
+                <button id="export-pdf-btn" style="display: none; margin-top: 10px;">Download Report as PDF</button>
+                <div id="download-link-container" style="margin-top: 10px;"></div> <!-- Container for the download link -->
+                <p id="export-status"></p>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Proposal Analyzer</p>
+            <p>Steffen Mauceri</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+    // Renamed proposals-dir-path to proposal-file-path-hidden for clarity
+    document.addEventListener('DOMContentLoaded', function() {
+        const callFileInput = document.getElementById('call_file_input');
+        const callPdfPathInput = document.getElementById('call-pdf-path'); // Hidden input
+        const callUploadStatus = document.getElementById('call_upload_status');
+
+        const proposalFileInput = document.getElementById('proposal_file_input');
+        const proposalFilePathHiddenInput = document.getElementById('proposal-file-path-hidden'); // Hidden input
+        const proposalUploadStatus = document.getElementById('proposal_upload_status');
+
+        const questionsFileInput = document.getElementById('questions_file_input_main');
+        const questionsFilePathInput = document.getElementById('questions-file-path'); // Hidden input
+        const questionsUploadStatus = document.getElementById('questions_upload_status');
+        const questionsContentTextArea = document.getElementById('questions-content');
+
+        function setupFileUpload(fileInput, doctype, pathInputHidden, statusElement) {
+            if (!fileInput) {
+                console.warn(`File input for doctype ${doctype} not found. Upload functionality for it will not work.`);
+                return;
+            }
+
+            fileInput.addEventListener('change', async function(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+
+                statusElement.textContent = `Uploading ${file.name}...`;
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('doctype', doctype);
+
+                try {
+                    const response = await fetch('/upload_main_document', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        statusElement.textContent = `Uploaded: ${data.filename}`;
+                        pathInputHidden.value = data.filepath; // Update the hidden path input
+
+                        if (doctype === 'questions' && data.filepath) {
+                            // Attempt to load content into textarea if a questions file is uploaded
+                            fetch('/load_path_data', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ path_type: 'questions_file', path_value: data.filepath })
+                            })
+                            .then(res => res.json())
+                            .then(qData => {
+                                if (qData.success && qData.questions_content) {
+                                    questionsContentTextArea.value = qData.questions_content;
+                                } else {
+                                    console.warn('Could not auto-load questions content after upload.');
+                                }
+                            }).catch(err => console.error('Error fetching uploaded questions content:', err));
+                        }
+
+                        // No longer need to call window.loadPathData for UI refresh of paths/lists here
+                        // as primary elements being updated are hidden or status messages.
+
+                    } else {
+                        statusElement.textContent = `Upload failed: ${data.message}`;
+                        alert(`Upload failed: ${data.message}`);
+                        pathInputHidden.value = ''; // Clear path if upload failed
+                    }
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                    statusElement.textContent = 'Upload error. See console.';
+                    alert('Upload error. See console.');
+                    pathInputHidden.value = ''; // Clear path on error
+                }
+                event.target.value = null;
+            });
+        }
+
+        setupFileUpload(callFileInput, 'call', callPdfPathInput, callUploadStatus);
+        setupFileUpload(proposalFileInput, 'proposal', proposalFilePathHiddenInput, proposalUploadStatus);
+        setupFileUpload(questionsFileInput, 'questions', questionsFilePathInput, questionsUploadStatus);
+
+        // Export PDF Button Logic (Adjusted)
+        const exportPdfButton = document.getElementById('export-pdf-btn');
+        const exportStatus = document.getElementById('export-status');
+        const downloadLinkContainer = document.getElementById('download-link-container');
+
+        if (exportPdfButton) {
+            exportPdfButton.addEventListener('click', async function() {
+                let analysisData = window.currentAnalysisJsonResultsForExport; // Get from global var
+
+                if (!analysisData) {
+                    exportStatus.textContent = 'No analysis data available to export. Run analysis first.';
+                    console.error("No analysis data found for PDF export (window.currentAnalysisJsonResultsForExport is null or undefined).");
+                    return;
+                }
+
+                exportStatus.textContent = 'Generating PDF...';
+                downloadLinkContainer.innerHTML = ''; // Clear previous link
+
+                try {
+                    const response = await fetch('/export_pdf', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            analysis_data: analysisData,
+                            // Include the original proposal filename for naming the PDF
+                            // This needs to be sourced from when the proposal was uploaded/analyzed
+                            proposal_filename: document.getElementById('proposal-file-path-hidden').value.split(/[\\/]/).pop() // Get filename from path
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        exportStatus.textContent = `PDF report generated: ${data.filename_server}`;
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = `/download_export/${data.filename_server}`;
+                        downloadLink.textContent = `Download ${data.filename_server}`;
+                        downloadLink.setAttribute('download', data.filename_server);
+                        downloadLinkContainer.appendChild(downloadLink);
+                    } else {
+                        exportStatus.textContent = `Error exporting PDF: ${data.message}`;
+                    }
+                } catch (error) {
+                    console.error('Error during PDF export:', error);
+                    exportStatus.textContent = 'Error during PDF export. See console.';
+                }
+            });
+        }
+
+        // ... (Your existing runAnalysisButton listener and other JS from script.js should be here
+        //      or in the linked script.js file. Ensure it uses the hidden input field values for paths.)
+    });
+    </script>
+</body>
+</html> 
