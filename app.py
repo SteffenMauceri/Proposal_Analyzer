@@ -1,12 +1,11 @@
 import os
-from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, session
 from pathlib import Path
 import subprocess
 import json
 import html
 import secrets
 import re
-import tempfile
 
 # PDF Generation
 from reportlab.lib.pagesizes import letter, landscape
@@ -20,16 +19,21 @@ from utils.file_helpers import get_proposals_from_dir, read_questions_content, g
 from services.pdf_export_service import PDFExportService
 from services.analysis_service import AnalysisService # Import the service
 
+# Import the LLM query function
+from proposal_analyzer.llm_client import query as ask_llm
+
+# Assuming main.py is in the same directory or accessible in PYTHONPATH
+# This might need adjustment based on your project structure if main_cli is not easily importable.
+# For now, we will call it as a subprocess.
+
+app = Flask(__name__)
+
+# Secret key for session management
+# In a production app, set this from an environment variable or a config file
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(16))
+
 # Define project root for easier path construction
 PROJECT_ROOT = Path(__file__).parent
-
-app = Flask(__name__,
-            static_folder=str(PROJECT_ROOT / 'static'),
-            template_folder=str(PROJECT_ROOT / 'templates'))
-
-# Ensure static and template directories exist
-(PROJECT_ROOT / 'static').mkdir(exist_ok=True)
-(PROJECT_ROOT / 'templates').mkdir(exist_ok=True)
 
 # Defaults for initial page load
 app.config['DEFAULT_CALL_FILES_DIR'] = PROJECT_ROOT / 'data' / 'call'
@@ -42,14 +46,25 @@ app.config['DEFAULT_PDF_EXPORT_DIR'] = PROJECT_ROOT / 'exports'
 (PROJECT_ROOT / 'data' / 'proposal').mkdir(parents=True, exist_ok=True)
 app.config['DEFAULT_PDF_EXPORT_DIR'].mkdir(parents=True, exist_ok=True) 
 
+# Ensure chat upload directory exists
+CHAT_UPLOADS_DIR = PROJECT_ROOT / 'data' / 'chat_uploads'
+CHAT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Directory for uploads from the main UI
 MAIN_UPLOADS_DIR = PROJECT_ROOT / 'data' / 'main_uploads'
 (MAIN_UPLOADS_DIR / 'call').mkdir(parents=True, exist_ok=True)
 (MAIN_UPLOADS_DIR / 'proposal').mkdir(parents=True, exist_ok=True)
 (MAIN_UPLOADS_DIR / 'questions').mkdir(parents=True, exist_ok=True)
 
+# Store classified file paths here, distinct from unclassified ones
+CHAT_UPLOADED_FILES_SESSION_KEY = 'chat_uploaded_classified_files'
+CHAT_UNCLASSIFIED_FILES_SESSION_KEY = 'chat_unclassified_files'
+
 # Initialize services
 analysis_service = AnalysisService(project_root=PROJECT_ROOT)
+
+# --- Helper Functions (Simplified) ---
+# Moved to utils.file_helpers
 
 # --- Routes ---
 @app.route('/')
@@ -148,101 +163,66 @@ def load_path_data_route():
 
 @app.route('/run_analysis', methods=['POST'])
 def run_analysis():
-    if 'proposal_pdf' not in request.files or 'call_pdf' not in request.files:
-        return jsonify(success=False, message="Call PDF and Proposal PDF files are required."), 400
+    data = request.json
+    call_pdf_path_str = data.get('call_pdf_path')
+    proposal_file_path_str = data.get('proposal_file_path') # Changed from proposals_dir_path
+    questions_file_path_str = data.get('questions_file_path')
+    # selected_proposal_filenames is no longer needed as we process one proposal at a time
+    model = "gpt-4.1-mini" # Hardcoded model
 
-    proposal_file = request.files['proposal_pdf']
-    call_file = request.files['call_pdf']
+    # Get checkbox states from the request
+    analyze_proposal_opt = data.get('analyze_proposal_opt', False)
+    spell_check_opt = data.get('spell_check_opt', False)
+    reviewer_feedback_opt = data.get('reviewer_feedback_opt', False)
 
-    if proposal_file.filename == '' or call_file.filename == '':
-        return jsonify(success=False, message="File names cannot be empty."), 400
-
-    # Get checkbox states from the form
-    analyze_proposal_opt = request.form.get('analyze_proposal_opt', 'false').lower() == 'true'
-    spell_check_opt = request.form.get('spell_check_opt', 'false').lower() == 'true'
-    reviewer_feedback_opt = request.form.get('reviewer_feedback_opt', 'false').lower() == 'true'
-    questions_content = request.form.get('questions_content', '')
-
-    try:
-        # Create a temporary directory to store uploaded files for this request
-        temp_dir = tempfile.TemporaryDirectory()
-        temp_dir_path = Path(temp_dir.name)
-
-        # Save files to the temporary directory
-        proposal_file_path = temp_dir_path / proposal_file.filename
-        proposal_file.save(proposal_file_path)
-
-        call_pdf_path = temp_dir_path / call_file.filename
-        call_file.save(call_pdf_path)
-
-        questions_file_path = None
-        if questions_content:
-            questions_file_path = temp_dir_path / "questions.txt"
-            questions_file_path.write_text(questions_content, encoding='utf-8')
-
-        # Check if API key is available before proceeding
-        try:
-            from proposal_analyzer.config import get_api_key
-            api_key = get_api_key()
-            app.logger.info("API key successfully retrieved")
-        except ValueError as e:
-            app.logger.error(f"API key validation failed: {e}")
-            return jsonify(success=False, message=f"Configuration error: {str(e)}"), 500
-
-        # For AnalysisService, proposals_dir_path is parent of proposal_file_path
-        proposals_dir_path = proposal_file_path.parent
-        selected_proposal_filenames = [proposal_file_path.name]
-        model = "gpt-4.1-mini" # Hardcoded model
-
-        def generate_stream_from_service():
-            try:
-                # Send initial status
-                yield f"data: {json.dumps({'type': 'log', 'message': 'Starting analysis...'})}\n\n"
-                yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Initializing analysis process...'}})}\n\n"
-                
-                app.logger.info("About to start analysis_service.run_analysis_blocking")
-                
-                # Use direct blocking analysis with timeout
-                analysis_results, error_message = analysis_service.run_analysis_blocking(
-                    call_pdf_path=call_pdf_path,
-                    proposals_dir_path=proposals_dir_path,
-                    questions_file_path=questions_file_path,
-                    model=model,
-                    selected_proposal_filenames=selected_proposal_filenames,
-                    logger=app.logger,
-                    analyze_proposal_opt=analyze_proposal_opt,
-                    spell_check_opt=spell_check_opt,
-                    reviewer_feedback_opt=reviewer_feedback_opt
-                )
-                
-                app.logger.info(f"Analysis completed. Error: {error_message is not None}")
-                
-                if error_message:
-                    app.logger.error(f"Analysis failed: {error_message}")
-                    error_event = {"type": "error", "message": f"Analysis failed: {html.escape(error_message)}"}
-                    yield f"data: {json.dumps(error_event)}\n\n"
-                else:
-                    app.logger.info("Analysis completed successfully")
-                    yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Analysis completed, preparing results...'}})}\n\n"
-                    result_event = {"type": "result", "payload": analysis_results}
-                    yield f"data: {json.dumps(result_event)}\n\n"
-                    
-            except Exception as e:
-                app.logger.error(f"Error during analysis: {e}", exc_info=True)
-                error_event = {"type": "error", "message": f"Analysis failed: {html.escape(str(e))}"}
-                yield f"data: {json.dumps(error_event)}\n\n"
-            finally:
-                # IMPORTANT: Clean up the temporary directory
-                app.logger.info("Cleaning up temporary directory")
-                temp_dir.cleanup()
-                final_message = {"type": "stream_end", "message": "Stream ended."}
-                yield f"data: {json.dumps(final_message)}\n\n"
+    if not call_pdf_path_str or not proposal_file_path_str:
+        return jsonify(success=False, message="Call PDF and Proposal PDF paths are required."), 400
         
-        return Response(stream_with_context(generate_stream_from_service()), mimetype='text/event-stream')
+    call_pdf_path = Path(call_pdf_path_str)
+    proposal_file_path = Path(proposal_file_path_str)
+    questions_file_path = Path(questions_file_path_str) if questions_file_path_str else None # Questions are optional
 
-    except Exception as e:
-        app.logger.error(f"Error setting up analysis: {e}", exc_info=True)
-        return jsonify(success=False, message=f"Server error setting up analysis: {e}"), 500
+    path_errors = []
+    if not call_pdf_path.is_file():
+        path_errors.append(f"Call PDF not found: {call_pdf_path_str}")
+    if not proposal_file_path.is_file():
+        path_errors.append(f"Proposal PDF not found: {proposal_file_path_str}")
+    if questions_file_path and not questions_file_path.is_file(): # Only error if path is given but file not found
+        path_errors.append(f"Questions file not found: {questions_file_path_str}")
+    
+    if path_errors:
+        return jsonify(success=False, message="; ".join(path_errors)), 400
+
+    # For AnalysisService, proposals_dir_path is parent of proposal_file_path
+    # and selected_proposal_filenames is just the name of the proposal_file_path
+    proposals_dir_path = proposal_file_path.parent
+    selected_proposal_filenames = [proposal_file_path.name]
+
+    def generate_stream_from_service():
+        try:
+            stream_iterator = analysis_service.run_analysis_stream(
+                call_pdf_path=call_pdf_path,
+                proposals_dir_path=proposals_dir_path, # Still needed by service
+                questions_file_path=questions_file_path,
+                model=model,
+                selected_proposal_filenames=selected_proposal_filenames, # List with one item
+                logger=app.logger,
+                # Pass the new options
+                analyze_proposal_opt=analyze_proposal_opt,
+                spell_check_opt=spell_check_opt,
+                reviewer_feedback_opt=reviewer_feedback_opt
+            )
+            for event_string in stream_iterator:
+                yield event_string 
+        except Exception as e:
+            app.logger.error(f"Error during analysis stream generation in app.py: {e}", exc_info=True)
+            error_event = {"type": "error", "message": f"An unexpected error occurred in app.py before stream could start: {html.escape(str(e))}"}
+            yield f"data: {json.dumps(error_event)}\n\n"
+            final_message = {"type": "stream_end", "message": "Stream ended due to pre-stream error."}
+            yield f"data: {json.dumps(final_message)}\n\n"
+
+    return Response(stream_with_context(generate_stream_from_service()), mimetype='text/event-stream')
+
 
 @app.route('/export_pdf', methods=['POST'])
 def export_pdf():
@@ -295,7 +275,7 @@ def export_pdf():
         
         if generated_pdf_path:
             app.logger.info(f"Comprehensive PDF exported successfully to {generated_pdf_path}")
-            return jsonify(success=True, message=f"PDF exported successfully to {server_pdf_filename}", filename_server=server_pdf_filename)
+        return jsonify(success=True, message=f"PDF exported successfully to {server_pdf_filename}", filename_server=server_pdf_filename)
         else:
             app.logger.error(f"Failed to generate PDF for {proposal_filename_original}")
             return jsonify(success=False, message="Failed to generate PDF report."), 500
@@ -316,6 +296,7 @@ def download_export(filename):
     except Exception as e:
         app.logger.error(f"Error downloading file {filename}: {e}", exc_info=True)
         return jsonify(success=False, message=f"Error downloading file: {str(e)}"), 500
+
 
 @app.route('/upload_main_document', methods=['POST'])
 def upload_main_document():
@@ -347,6 +328,7 @@ def upload_main_document():
                 "filename": filename,
                 "doctype": doctype
             }
+            # No longer need to return proposals_dir_path as we handle single proposal file path
 
             return jsonify(response_data)
         except Exception as e:
@@ -355,29 +337,331 @@ def upload_main_document():
             
     return jsonify(success=False, message="File upload failed for an unknown reason."), 500
 
-@app.route('/debug/static')
-def debug_static():
-    """Debug route to check static file configuration"""
-    static_dir = Path(app.static_folder)
-    files = []
-    if static_dir.exists():
-        for file in static_dir.iterdir():
-            if file.is_file():
-                files.append({
-                    'name': file.name,
-                    'size': file.stat().st_size,
-                    'path': str(file)
-                })
-    return jsonify({
-        'static_folder': app.static_folder,
-        'static_folder_exists': static_dir.exists(),
-        'files': files
-    })
+# --- Chat UI Routes ---
 
-if __name__ == "__main__":
-    # This block is for local development.
-    # When deployed on Render, a Gunicorn command from render.yaml is used instead.
-    port = int(os.environ.get("PORT", 5000))
-    # Enable debug mode locally unless FLASK_ENV is set to 'production'
-    debug = os.environ.get("FLASK_ENV") != "production"
-    app.run(host="0.0.0.0", port=port, debug=debug) 
+@app.route('/chat')
+def chat_index():
+    """Serves the main chat UI page and initializes chat session."""
+    # Initialize session variables if they don't exist
+    if 'conversation_history' not in session:
+        session['conversation_history'] = []
+    if CHAT_UPLOADED_FILES_SESSION_KEY not in session:
+        session[CHAT_UPLOADED_FILES_SESSION_KEY] = {'proposal': None, 'call': None, 'questions': None}
+    if CHAT_UNCLASSIFIED_FILES_SESSION_KEY not in session:
+        session[CHAT_UNCLASSIFIED_FILES_SESSION_KEY] = {} # Stores {filename: path}
+    if 'analysis_results' not in session:
+        session['analysis_results'] = None
+
+    # Initial LLM greeting if conversation is new
+    if not session['conversation_history']:
+        system_prompt = "You are a helpful AI assistant for analyzing proposals. Your goal is to guide the user through uploading a proposal PDF, a call for proposal PDF, and optionally a questions.txt file. If a file is uploaded and its type (proposal, call, questions) cannot be determined from the name, you MUST ask the user to clarify its type. When the user provides a classification (e.g., 'file X is the call document'), acknowledge it and then immediately include an action tag like [ACTION:CLASSIFY_FILE filename='X' type='call'] in your response. Replace 'X' with the actual filename and 'call' with the identified type (proposal, call, or questions). Once all necessary files (proposal and call) are uploaded and classified, explicitly ask the user if they want to proceed with the analysis. If they confirm, respond with 'Okay, I will start the analysis now. [ACTION:RUN_ANALYSIS]' and nothing else. After analysis, you will help them understand the results and export them to PDF. Keep your responses concise and clear. Start by greeting the user and asking for the proposal and call for proposal documents."
+        initial_messages = [{"role": "system", "content": system_prompt}]
+        
+        try:
+            llm_response = ask_llm(messages=initial_messages, model='gpt-4.1-nano')
+            session['conversation_history'].append({"role": "system", "content": system_prompt}) # Store system prompt for context
+            session['conversation_history'].append({"role": "assistant", "content": llm_response})
+        except Exception as e:
+            app.logger.error(f"Error getting initial LLM greeting: {e}", exc_info=True)
+            llm_response = "Hello! I'm having a little trouble connecting to my brain right now. Please try again in a moment."
+            # We don't add this error to history, the JS will show the initial greeting if this fails.
+            # Or, we can add a non-LLM system message to history:
+            session['conversation_history'].append({"role": "assistant", "content": llm_response})
+
+    return render_template('chat_ui/index.html', initial_conversation=session['conversation_history'])
+
+@app.route('/chat_message', methods=['POST'])
+def chat_message():
+    """Handles incoming chat messages from the user and gets LLM response."""
+    data = request.json
+    user_message_content = data.get('message')
+
+    if not user_message_content:
+        return jsonify(success=False, message="No message content."), 400
+
+    # Ensure session is initialized (it should be by /chat, but as a fallback)
+    if 'conversation_history' not in session:
+        session['conversation_history'] = []
+        # Potentially add a default system prompt here if starting fresh
+
+    session['conversation_history'].append({"role": "user", "content": user_message_content})
+
+    # Prepare messages for LLM (system prompt + history)
+    # The system prompt can be dynamic based on state, or a general one.
+    # For now, the initial system prompt is already in history.
+    current_classified_files = session.get(CHAT_UPLOADED_FILES_SESSION_KEY, {})
+    current_unclassified_files = session.get(CHAT_UNCLASSIFIED_FILES_SESSION_KEY, {})
+
+    files_status_prompt = "Current classified files: Proposal: {proposal_status}, Call: {call_status}, Questions: {questions_status}. ".format(
+        proposal_status="Uploaded" if current_classified_files.get('proposal') else "Missing",
+        call_status="Uploaded" if current_classified_files.get('call') else "Missing",
+        questions_status="Uploaded" if current_classified_files.get('questions') else "Missing/Default"
+    )
+    if current_unclassified_files:
+        files_status_prompt += f"Unclassified files: {list(current_unclassified_files.keys())}. You need to ask the user to classify these. Example: 'What type of document is {list(current_unclassified_files.keys())[0]}? Is it a Call, Proposal, or Questions file?' "
+
+    # Construct the messages for the LLM call
+    # We prepend a system message that gives current context, then the history
+    # The very first message in history should be the main system prompt for the LLM's persona.
+    messages_for_llm = []
+    if session['conversation_history'] and session['conversation_history'][0]['role'] == 'system':
+        messages_for_llm.append(session['conversation_history'][0]) # Main system prompt
+    else:
+        # Fallback if main system prompt is missing (should not happen)
+        messages_for_llm.append({"role": "system", "content": "You are a helpful AI assistant for analyzing proposals. Your goal is to guide the user through uploading a proposal PDF, a call for proposal PDF, and optionally a questions.txt file. If a file is uploaded and its type (proposal, call, questions) cannot be determined from the name, you MUST ask the user to clarify its type. When the user provides a classification (e.g., 'file X is the call document'), acknowledge it and then immediately include an action tag like [ACTION:CLASSIFY_FILE filename='X' type='call'] in your response. Replace 'X' with the actual filename and 'call' with the identified type (proposal, call, or questions). Once all necessary files (proposal and call) are uploaded and classified, explicitly ask the user if they want to proceed with the analysis. If they confirm, respond with 'Okay, I will start the analysis now. [ACTION:RUN_ANALYSIS]' and nothing else. After analysis, you will help them understand the results and export them to PDF."})
+    
+    # Add a contextual system message about current file status and next steps
+    contextual_system_message_content = files_status_prompt + " Guide the user. If there are unclassified files, ask for their type. If the user provides a classification, acknowledge it and use the [ACTION:CLASSIFY_FILE filename='actual_filename.pdf' type='detected_type'] tag. If all files (proposal and call) are classified and present and you haven't asked to run analysis yet, ask if they want to run it. If they confirm, use the [ACTION:RUN_ANALYSIS] tag. If analysis was run, discuss results or ask if they want a PDF."
+    messages_for_llm.append({"role": "system", "content": contextual_system_message_content})
+
+    # Add actual conversation history (excluding the main system prompt which is already added)
+    history_to_add = session['conversation_history'][1:] if session['conversation_history'] and session['conversation_history'][0]['role'] == 'system' else session['conversation_history']
+    messages_for_llm.extend(history_to_add)
+    # The user_message_content is already the last item in session['conversation_history'] at this point
+    # So, messages_for_llm now contains: [main_system_prompt, contextual_system_prompt, actual_history_including_last_user_message]
+
+    try:
+        llm_response_content = ask_llm(messages=messages_for_llm, model='gpt-4.1-nano')
+        session['conversation_history'].append({"role": "assistant", "content": llm_response_content})
+        session.modified = True 
+
+        # --- Handle [ACTION:CLASSIFY_FILE] --- 
+        # Example: [ACTION:CLASSIFY_FILE filename='F.14+HPOSS.pdf' type='call']
+        classify_action_match = re.search(r"\[ACTION:CLASSIFY_FILE filename='(.*?)' type='(.*?)'\]", llm_response_content)
+        if classify_action_match:
+            classified_filename = classify_action_match.group(1)
+            classified_type = classify_action_match.group(2)
+            
+            app.logger.info(f"LLM indicated classification: Filename: {classified_filename}, Type: {classified_type}")
+
+            unclassified_files = session.get(CHAT_UNCLASSIFIED_FILES_SESSION_KEY, {})
+            classified_files_dict = session.get(CHAT_UPLOADED_FILES_SESSION_KEY, {})
+
+            if classified_filename in unclassified_files and classified_type in ['proposal', 'call', 'questions']:
+                file_path_to_classify = unclassified_files.pop(classified_filename) # Remove from unclassified
+                classified_files_dict[classified_type] = file_path_to_classify # Add to classified
+                
+                session[CHAT_UNCLASSIFIED_FILES_SESSION_KEY] = unclassified_files
+                session[CHAT_UPLOADED_FILES_SESSION_KEY] = classified_files_dict
+                session.modified = True
+                app.logger.info(f"Successfully classified {classified_filename} as {classified_type} and updated session.")
+                
+                # The LLM's response already contains the user-facing acknowledgement.
+                # We just clean the tag for the user to see.
+                llm_response_content_cleaned = llm_response_content.replace(classify_action_match.group(0), "").strip()
+                # Update conversation history with the cleaned response
+                session['conversation_history'][-1]['content'] = llm_response_content_cleaned
+                session.modified = True
+                # Return the cleaned response. The next turn will have updated file status for the LLM.
+                return jsonify(success=True, response=llm_response_content_cleaned)
+            else:
+                app.logger.warning(f"Could not classify {classified_filename} as {classified_type}. File not in unclassified list or invalid type.")
+                # Let LLM response pass through, it might be handling the error conversationally.
+
+        # --- Handle [ACTION:RUN_ANALYSIS] --- 
+        if "[ACTION:RUN_ANALYSIS]" in llm_response_content:
+            # Verify necessary files
+            classified_files_check = session.get(CHAT_UPLOADED_FILES_SESSION_KEY, {})
+            call_pdf_check = classified_files_check.get('call')
+            proposal_pdf_check = classified_files_check.get('proposal')
+            session.modified = True # Ensure session is saved before redirecting to stream
+            
+            if not call_pdf_check or not proposal_pdf_check:
+                no_files_msg = "It seems we are missing either the call or proposal PDF. Please upload both before we can start the analysis."
+                session['conversation_history'].append({"role": "assistant", "content": no_files_msg}) # Add a follow-up LLM message
+                session.modified = True
+                # LLM said it would run, but we interrupt with this correction, clean the original LLM response tag.
+                cleaned_llm_response = llm_response_content.replace("[ACTION:RUN_ANALYSIS]", "").strip()
+                session['conversation_history'][-1]['content'] = cleaned_llm_response # Update the history for the tag-cleaned original message
+                return jsonify(success=True, response=no_files_msg) 
+
+            # Clear previous analysis results before starting a new one
+            session['analysis_results'] = None
+            session.modified = True
+
+            # Respond to client to initiate stream connection
+            # The LLM's message "Okay, I will start the analysis now..." will be shown, 
+            # and then the client will connect to /stream_analysis_results
+            cleaned_llm_response_for_stream_action = llm_response_content.replace("[ACTION:RUN_ANALYSIS]", "").strip()
+            session['conversation_history'][-1]['content'] = cleaned_llm_response_for_stream_action # Update history with cleaned message
+            return jsonify(success=True, response=cleaned_llm_response_for_stream_action, action="start_analysis_stream")
+
+        return jsonify(success=True, response=llm_response_content)
+    except Exception as e:
+        app.logger.error(f"Error in /chat_message calling LLM: {e}", exc_info=True)
+        error_response = "I encountered an issue trying to process that. Please try rephrasing or wait a moment."
+        # Add LLM's error placeholder to history so user sees it
+        session['conversation_history'].append({"role": "assistant", "content": error_response})
+        session.modified = True
+        return jsonify(success=False, message="LLM API call failed.", response=error_response), 500
+
+@app.route('/chat_upload', methods=['POST'])
+def chat_upload():
+    """Handles file uploads from the chat UI, updates session, and gets LLM response."""
+    if 'file' not in request.files:
+        return jsonify(success=False, message="No file part in the request."), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify(success=False, message="No selected file."), 400
+        
+    if file:
+        filename = file.filename # In a real app, sanitize this!
+        save_path = CHAT_UPLOADS_DIR / filename
+        try:
+            file.save(save_path)
+            app.logger.info(f"File '{filename}' uploaded to {save_path}")
+
+            # Initialize session keys if they don't exist (important for first upload)
+            if CHAT_UPLOADED_FILES_SESSION_KEY not in session:
+                session[CHAT_UPLOADED_FILES_SESSION_KEY] = {'proposal': None, 'call': None, 'questions': None}
+            if CHAT_UNCLASSIFIED_FILES_SESSION_KEY not in session:
+                session[CHAT_UNCLASSIFIED_FILES_SESSION_KEY] = {}
+
+            file_type_guess = "unknown"
+            fn_lower = filename.lower()
+            if "proposal" in fn_lower:
+                file_type_guess = "proposal"
+            elif "call" in fn_lower or "solicitation" in fn_lower or "rfi" in fn_lower or "rfp" in fn_lower: # Broader terms for call
+                file_type_guess = "call"
+            elif "question" in fn_lower:
+                file_type_guess = "questions"
+            
+            upload_acknowledged_message_for_llm = f"File '{html.escape(filename)}' was uploaded by the user. "
+
+            if file_type_guess != "unknown":
+                session[CHAT_UPLOADED_FILES_SESSION_KEY][file_type_guess] = str(save_path)
+                # If this filename was previously unclassified, remove it from there
+                if filename in session[CHAT_UNCLASSIFIED_FILES_SESSION_KEY]:
+                    del session[CHAT_UNCLASSIFIED_FILES_SESSION_KEY][filename]
+                upload_acknowledged_message_for_llm += f"It has been automatically classified as a '{file_type_guess}' document."
+            else:
+                session[CHAT_UNCLASSIFIED_FILES_SESSION_KEY][filename] = str(save_path)
+                upload_acknowledged_message_for_llm += "Its type could not be automatically determined. You need to ask the user to classify it (e.g., 'Is this a Call, Proposal, or Questions file?')."
+            
+            session.modified = True
+
+            # This message is for the LLM's context, not directly for the user from this endpoint.
+            # The LLM will formulate the user-facing message based on this and the overall context.
+            session['conversation_history'].append({"role": "system", "content": upload_acknowledged_message_for_llm})
+
+            # Construct messages for LLM to respond to the upload
+            messages_for_llm = []
+            if session['conversation_history'] and session['conversation_history'][0]['role'] == 'system':
+                 messages_for_llm.append(session['conversation_history'][0]) # Main system prompt
+            else: messages_for_llm.append({"role": "system", "content": "You are a helpful AI assistant for analyzing proposals."})
+            
+            current_classified_files = session.get(CHAT_UPLOADED_FILES_SESSION_KEY, {})
+            current_unclassified_files = session.get(CHAT_UNCLASSIFIED_FILES_SESSION_KEY, {})
+
+            files_status_prompt_after_upload = "Current classified files: Proposal: {proposal_status}, Call: {call_status}, Questions: {questions_status}. ".format(
+                proposal_status="Uploaded" if current_classified_files.get('proposal') else "Missing",
+                call_status="Uploaded" if current_classified_files.get('call') else "Missing",
+                questions_status="Uploaded" if current_classified_files.get('questions') else "Missing/Default"
+            )
+            if current_unclassified_files:
+                 files_status_prompt_after_upload += f"Unclassified files: {list(current_unclassified_files.keys())}. Remember to ask the user to classify these if you haven't already. "
+
+            system_context_for_upload = files_status_prompt_after_upload + "Acknowledge the upload of '" + html.escape(filename) + "'. Then guide the user on next steps. If there are unclassified files, ask about them. If all files (proposal and call) are classified and present, ask if they want to run analysis."
+            
+            # Add relevant history for the LLM to form its response to the upload
+            # The most recent history items are most relevant here.
+            messages_for_llm.append({"role": "system", "content": system_context_for_upload})
+            # We take the main system prompt (added above) and the last few turns of conversation history
+            # The `upload_acknowledged_message_for_llm` is the latest in history.
+            history_to_add_for_upload = session['conversation_history'][1:] 
+            messages_for_llm.extend(history_to_add_for_upload)
+
+            llm_response_content = ask_llm(messages=messages_for_llm, model='gpt-4.1-nano')
+            session['conversation_history'].append({"role": "assistant", "content": llm_response_content})
+            session.modified = True
+
+            return jsonify(success=True, message=f"File '{filename}' stored.", llm_response=llm_response_content, filename=filename)
+        except Exception as e:
+            app.logger.error(f"Error processing uploaded file {filename} or calling LLM: {e}", exc_info=True)
+            error_response = f"Could not save file '{html.escape(filename)}' or process its upload. Please try again."
+            session['conversation_history'].append({"role": "assistant", "content": error_response})
+            session.modified = True
+            return jsonify(success=False, message=f"Could not save file or process upload: {str(e)}", llm_response=error_response), 500
+            
+    return jsonify(success=False, message="File upload failed for an unknown reason."), 500
+
+@app.route('/stream_analysis_results')
+def stream_analysis_results():
+    """Streams analysis results using SSE."""
+    # session.sid is not available for SecureCookieSession, remove or find alternative if needed for logging.
+    app.logger.info(f"Entering /stream_analysis_results. Current session keys: {list(session.keys())}")
+    app.logger.info(f"Session contents for {CHAT_UPLOADED_FILES_SESSION_KEY}: {session.get(CHAT_UPLOADED_FILES_SESSION_KEY)}")
+    app.logger.info(f"Session contents for {CHAT_UNCLASSIFIED_FILES_SESSION_KEY}: {session.get(CHAT_UNCLASSIFIED_FILES_SESSION_KEY)}")
+
+    try:
+        classified_files = session.get(CHAT_UPLOADED_FILES_SESSION_KEY, {})
+        call_pdf_path_str = classified_files.get('call')
+        proposal_pdf_path_str = classified_files.get('proposal')
+
+        if not call_pdf_path_str or not proposal_pdf_path_str:
+            def error_stream_missing_files():
+                app.logger.error(f"Missing call/proposal PDF path in session for stream. Call: {call_pdf_path_str}, Proposal: {proposal_pdf_path_str}")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Missing call or proposal file in session for analysis. Ensure files are uploaded and correctly classified.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'stream_end', 'message': 'Stream ended due to missing files.'})}\n\n"
+            return Response(stream_with_context(error_stream_missing_files()), mimetype='text/event-stream')
+
+        call_pdf_path = Path(call_pdf_path_str)
+        proposal_pdf_file_path = Path(proposal_pdf_path_str)
+        proposals_dir_path = proposal_pdf_file_path.parent
+        selected_proposal_filenames = [proposal_pdf_file_path.name]
+        
+        questions_file_path_str = classified_files.get('questions')
+        questions_file_path = Path(questions_file_path_str) if questions_file_path_str else None
+        
+        model_for_analysis = 'gpt-4.1-mini'
+
+    except Exception as e_setup:
+        app.logger.error(f"Error during setup in /stream_analysis_results: {e_setup}", exc_info=True)
+        def error_stream_setup_failure():
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Server error during analysis setup: {html.escape(str(e_setup))}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'message': 'Stream ended due to server setup error.'})}\n\n"
+        return Response(stream_with_context(error_stream_setup_failure()), mimetype='text/event-stream')
+
+    # This inner function is what gets streamed
+    def generate_stream_wrapper():
+        try:
+            app.logger.info(f"generate_stream_wrapper: Starting analysis with call_pdf={call_pdf_path}, proposals_dir={proposals_dir_path}, questions={questions_file_path}, model={model_for_analysis}, selected={selected_proposal_filenames}")
+            stream_iterator = analysis_service.run_analysis_stream(
+                call_pdf_path=call_pdf_path,
+                proposals_dir_path=proposals_dir_path, 
+                questions_file_path=questions_file_path,
+                model=model_for_analysis, 
+                selected_proposal_filenames=selected_proposal_filenames,
+                logger=app.logger
+            )
+            for event_string in stream_iterator:
+                if event_string.startswith("data:"):
+                    try:
+                        data_json_str = event_string[len("data:"):].strip()
+                        event_data = json.loads(data_json_str)
+                        if event_data.get("type") == "result" and "payload" in event_data:
+                            session['analysis_results'] = event_data["payload"]
+                            session.modified = True
+                            app.logger.info("Analysis results stored in session.")
+                    except json.JSONDecodeError as je:
+                        app.logger.error(f"JSONDecodeError in stream_analysis_results while checking for result: {je}")
+                    except Exception as ex:
+                        app.logger.error(f"Error in stream_analysis_results while checking for result: {ex}")    
+                yield event_string
+        except Exception as e_service_call:
+            app.logger.error(f"Error during analysis_service.run_analysis_stream call: {e_service_call}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Error calling analysis service: {html.escape(str(e_service_call))}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'message': 'Stream ended due to analysis service error.'})}\n\n"
+
+    return Response(stream_with_context(generate_stream_wrapper()), mimetype='text/event-stream')
+
+if __name__ == '__main__':
+    # Make sure to create a 'templates' and 'static' directory in the same level as app.py
+    # For development, debug=True is useful.
+    # For production, use environment variables
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    port = int(os.environ.get('PORT', 5000))
+    host = os.environ.get('HOST', '0.0.0.0')
+    app.run(debug=debug_mode, host=host, port=port) 

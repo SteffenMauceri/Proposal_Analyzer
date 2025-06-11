@@ -262,25 +262,25 @@ class PDFExportService:
                 story.append(Spacer(1, 0.15*inch))
             
             elif service_key == "reviewer_feedback":
-                for item in findings_list:
+                 for item in findings_list:
                     # Check if it's an error from the service itself
                     if item.get("type", "").endswith("_error"):
-                        service_name = html.escape(item.get("service_name", "Feedback Service"))
+                    service_name = html.escape(item.get("service_name", "Feedback Service"))
                         error_explanation = html.escape(item.get("explanation", "An error occurred during feedback generation."))
                         story.append(Paragraph(f"<b>{service_name} Error:</b>", h3_style))
                         story.append(Paragraph(error_explanation, error_style))
                     elif item.get('service_name', '').endswith('(placeholder)'): # Legacy placeholder handling
                         service_name = html.escape(item.get("service_name", "Placeholder Service"))
-                        placeholder_explanation = html.escape(item.get("explanation", "N/A"))
+                    placeholder_explanation = html.escape(item.get("explanation", "N/A"))
                         story.append(Paragraph(f"<b>{service_name}:</b>", h3_style))
-                        story.append(Paragraph(f"<em>{placeholder_explanation}</em>", placeholder_style))
+                    story.append(Paragraph(f"<em>{placeholder_explanation}</em>", placeholder_style))
                     else: # Actual feedback display
                         service_name = html.escape(item.get("service_name", "Expert Reviewer Feedback"))
                         feedback_content = item.get("suggestion", "N/A")
                         explanation = item.get("explanation", "")
                         
                         story.append(Paragraph(f"<b>{service_name}:</b>", h3_style))
-                        story.append(Spacer(1, 0.05*inch))
+                    story.append(Spacer(1, 0.05*inch))
                         
                         # Handle feedback content similar to proposal analysis answers
                         # The feedback may contain markdown-like formatting from the LLM
@@ -303,7 +303,7 @@ class PDFExportService:
                             feedback_display = re.sub(r'<br/>(\d+\.)\s*', r'<br/>&nbsp;&nbsp;&nbsp;&nbsp;\1 ', feedback_display)
                             
                             story.append(Paragraph(feedback_display, normal_style))
-                        else:
+                else:
                             story.append(Paragraph("No feedback content available.", normal_style))
                         
                         # Add explanation if available and meaningful
@@ -311,8 +311,8 @@ class PDFExportService:
                             story.append(Spacer(1, 0.05*inch))
                             story.append(Paragraph(f"<i>{html.escape(explanation)}</i>", suggestion_style))
                         
-                    story.append(Spacer(1, 0.15*inch))
-            
+                story.append(Spacer(1, 0.15*inch))
+
             else: # Generic fallback for any other future service types
                 story.append(Paragraph(f"<i>Note: Unknown service type '{service_key}'. Displaying raw data:</i>", self.styles['Italic']))
                 story.append(Spacer(1, 0.05*inch))
@@ -328,7 +328,7 @@ class PDFExportService:
                                 story.append(Paragraph(f"<b>{html.escape(str(key))}:</b> {html.escape(str(value))}", normal_style))
                         story.append(Spacer(1, 0.05*inch))
                     else:
-                        story.append(Paragraph(html.escape(str(item)), normal_style))
+                    story.append(Paragraph(html.escape(str(item)), normal_style))
                 story.append(Spacer(1, 0.15*inch))
         
         # Final note

@@ -1,150 +1,216 @@
 document.addEventListener('DOMContentLoaded', function () {
-    try {
-        console.log('DOM fully loaded and parsed. Initializing script...');
+    console.log('DOM fully loaded and parsed'); // Debug: DOM loaded
 
-        // Hidden Path Inputs (updated from visible inputs)
-        const callPdfPathInput = document.getElementById('call-pdf-path'); // Hidden
-        const proposalFilePathHiddenInput = document.getElementById('proposal-file-path-hidden'); // Hidden
-        const questionsFilePathInput = document.getElementById('questions-file-path'); // Hidden
+    // Hidden Path Inputs (updated from visible inputs)
+    const callPdfPathInput = document.getElementById('call-pdf-path'); // Hidden
+    const proposalFilePathHiddenInput = document.getElementById('proposal-file-path-hidden'); // Hidden
+    const questionsFilePathInput = document.getElementById('questions-file-path'); // Hidden
 
-        // Questions Editor
-        const questionsContentTextarea = document.getElementById('questions-content');
+    // Questions Editor
+    const questionsContentTextarea = document.getElementById('questions-content');
 
-        // Analysis
-        const runAnalysisBtn = document.getElementById('run-analysis-btn');
-        const analysisOutputPre = document.getElementById('analysis-output');
-        const analysisSpinner = document.getElementById('analysis-spinner');
-        const progressContainer = document.getElementById('progress-container');
-        const progressBar = document.getElementById('analysis-progress-bar');
+    // Analysis
+    const runAnalysisBtn = document.getElementById('run-analysis-btn');
+    const analysisOutputPre = document.getElementById('analysis-output');
+    const analysisSpinner = document.getElementById('analysis-spinner');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('analysis-progress-bar');
 
-        // Export related elements (referenced by inline script in index.html, but listed here for context if needed)
-        // const exportPdfBtn = document.getElementById('export-pdf-btn');
-        // const exportStatusP = document.getElementById('export-status');
-        // const downloadLinkContainer = document.getElementById('download-link-container');
+    // Debug: Check if elements are found
+    console.log('callPdfPathInput:', callPdfPathInput);
+    console.log('proposalFilePathHiddenInput:', proposalFilePathHiddenInput);
+    console.log('questionsFilePathInput:', questionsFilePathInput);
+    console.log('questionsContentTextarea:', questionsContentTextarea);
+    console.log('runAnalysisBtn:', runAnalysisBtn);
+    console.log('analysisOutputPre:', analysisOutputPre);
 
-        // --- Get Checkbox Elements ---
-        const analyzeProposalOptCheckbox = document.getElementById('analyze-proposal-opt');
-        const spellCheckOptCheckbox = document.getElementById('spell-check-opt');
-        const reviewerFeedbackOptCheckbox = document.getElementById('reviewer-feedback-opt');
-        // const nasaPmFeedbackOptCheckbox = document.getElementById('nasa-pm-feedback-opt');
+    // Export related elements (referenced by inline script in index.html, but listed here for context if needed)
+    // const exportPdfBtn = document.getElementById('export-pdf-btn');
+    // const exportStatusP = document.getElementById('export-status');
+    // const downloadLinkContainer = document.getElementById('download-link-container');
 
-        // This variable will be populated by the 'result' event from SSE
-        // It is used by the inline script in index.html for PDF export.
-        // To make it accessible, we attach it to window or handle it via custom events if preferred.
-        // For simplicity, using window for now, assuming script.js loads before inline script that might use it.
-        window.currentAnalysisJsonResultsForExport = null;
+    // --- Get Checkbox Elements ---
+    const analyzeProposalOptCheckbox = document.getElementById('analyze-proposal-opt');
+    const spellCheckOptCheckbox = document.getElementById('spell-check-opt');
+    const reviewerFeedbackOptCheckbox = document.getElementById('reviewer-feedback-opt');
+    // const nasaPmFeedbackOptCheckbox = document.getElementById('nasa-pm-feedback-opt');
 
-        // --- File Input Elements (for getting file objects) ---
-        const callPdfFileInput = document.getElementById('call_pdf_upload_input');
-        const proposalFileInput = document.getElementById('proposal_file_upload_input');
+    // This variable will be populated by the 'result' event from SSE
+    // It is used by the inline script in index.html for PDF export.
+    // To make it accessible, we attach it to window or handle it via custom events if preferred.
+    // For simplicity, using window for now, assuming script.js loads before inline script that might use it.
+    window.currentAnalysisJsonResultsForExport = null;
 
-        // Check if essential elements exist
-        if (!runAnalysisBtn || !callPdfFileInput || !proposalFileInput || !analysisOutputPre) {
-            console.error('A critical element is missing from the page. Analysis cannot run.');
-            console.error('Missing elements:', {
-                runAnalysisBtn: !!runAnalysisBtn,
-                callPdfFileInput: !!callPdfFileInput,
-                proposalFileInput: !!proposalFileInput,
-                analysisOutputPre: !!analysisOutputPre
-            });
-            alert('Error: A critical UI element could not be found. Please contact support.');
-            return;
-        }
-
+    // Run Analysis
+    if(runAnalysisBtn) {
         runAnalysisBtn.addEventListener('click', async () => {
-            try {
-                console.log('Run Analysis button clicked');
+            console.log('Run Analysis button clicked'); // Debug: Button click
 
-                const callPdfFile = callPdfFileInput.files[0];
-                const proposalFile = proposalFileInput.files[0];
+            const callPdfPath = callPdfPathInput ? callPdfPathInput.value.trim() : '';
+            const proposalFilePath = proposalFilePathHiddenInput ? proposalFilePathHiddenInput.value.trim() : '';
+            let questionsFilePath = questionsFilePathInput ? questionsFilePathInput.value.trim() : ''; 
+            const questionsContentToSave = questionsContentTextarea ? questionsContentTextarea.value.trim() : '';
 
-                if (!callPdfFile) {
-                    alert('Call Document must be uploaded.');
-                    return;
-                }
-                if (!proposalFile) {
-                    alert('Proposal PDF must be uploaded.');
-                    return;
-                }
-                
-                console.log('File validation passed, proceeding with analysis...');
+            // Get checkbox states
+            const analyzeProposalOpt = analyzeProposalOptCheckbox ? analyzeProposalOptCheckbox.checked : false;
+            const spellCheckOpt = spellCheckOptCheckbox ? spellCheckOptCheckbox.checked : false;
+            const reviewerFeedbackOpt = reviewerFeedbackOptCheckbox ? reviewerFeedbackOptCheckbox.checked : false;
+            // const nasaPmFeedbackOpt = nasaPmFeedbackOptCheckbox ? nasaPmFeedbackOptCheckbox.checked : false;
 
-                // Continue with the rest of the function...
-                const questionsContentToSave = questionsContentTextarea ? questionsContentTextarea.value.trim() : '';
-                const analyzeProposalOpt = analyzeProposalOptCheckbox ? analyzeProposalOptCheckbox.checked : false;
-                const spellCheckOpt = spellCheckOptCheckbox ? spellCheckOptCheckbox.checked : false;
-                const reviewerFeedbackOpt = reviewerFeedbackOptCheckbox ? reviewerFeedbackOptCheckbox.checked : false;
+            // Debug: Log path values
+            console.log('Call PDF Path:', callPdfPath);
+            console.log('Proposal File Path:', proposalFilePath);
+            console.log('Questions File Path (initial):', questionsFilePath);
+            console.log('Questions Content to Save:', questionsContentToSave);
+            console.log('Analyze Proposal Option:', analyzeProposalOpt);
+            console.log('Spell Check Option:', spellCheckOpt);
+            console.log('Reviewer Feedback Option:', reviewerFeedbackOpt);
+            // console.log('NASA PM Feedback Option:', nasaPmFeedbackOpt);
 
-                analysisOutputPre.textContent = 'Starting analysis...';
-                analysisOutputPre.style.color = '#333';
+            // --- Validate required uploads ---
+            let isValid = true;
+            if (!callPdfPath) {
+                alert('Call Document must be uploaded.');
+                const statusEl = document.getElementById('call_upload_status');
+                if(statusEl) { statusEl.textContent = 'Call Document is required.'; statusEl.style.color = 'red'; }
+                isValid = false;
+            }
+            if (!proposalFilePath) {
+                alert('Proposal PDF must be uploaded.');
+                const statusEl = document.getElementById('proposal_upload_status');
+                if(statusEl) { statusEl.textContent = 'Proposal PDF is required.'; statusEl.style.color = 'red'; }
+                isValid = false;
+            }
+            if (!isValid) return;
+
+            // --- Auto-save questions if content exists or if a file was previously uploaded (to capture edits) ---
+            // The inline script in index.html attempts to load questions from an uploaded file into the textarea.
+            // This logic ensures that any content in textarea (whether typed or loaded+edited) is saved.
+            if (questionsContentToSave !== "" || questionsFilePath) { // Process if there's content or if a file was ever specified
+                analysisOutputPre.textContent = 'Saving questions...';
+                analysisOutputPre.style.color = 'orange';
                 if(analysisSpinner) analysisSpinner.style.display = 'block';
 
-                const formData = new FormData();
-                formData.append('call_pdf', callPdfFile);
-                formData.append('proposal_pdf', proposalFile);
-                formData.append('questions_content', questionsContentToSave);
-                formData.append('analyze_proposal_opt', analyzeProposalOpt);
-                formData.append('spell_check_opt', spellCheckOpt);
-                formData.append('reviewer_feedback_opt', reviewerFeedbackOpt);
+                try {
+                    const saveResponse = await fetch('/save_questions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            content: questionsContentToSave, 
+                            questions_file_path: questionsFilePath // Send existing path or empty to trigger default save
+                        }),
+                    });
+                    const saveData = await saveResponse.json();
+                    if (!saveData.success) {
+                        analysisOutputPre.textContent = `Error saving questions: ${saveData.message}. Analysis not started.`;
+                        analysisOutputPre.style.color = 'red';
+                        alert(`Failed to save questions: ${saveData.message}\nAnalysis will not run.`);
+                        if(analysisSpinner) analysisSpinner.style.display = 'none';
+                        return;
+                    }
+                    questionsFilePath = saveData.filepath; // Update with path where questions were actually saved
+                    questionsFilePathInput.value = questionsFilePath; // Update hidden input
+                } catch (error) {
+                    analysisOutputPre.textContent = `Error saving questions: ${error}. Analysis not started.`;
+                    analysisOutputPre.style.color = 'red';
+                    alert(`Failed to save questions: ${error}\nAnalysis will not run.`);
+                    if(analysisSpinner) analysisSpinner.style.display = 'none';
+                    return;
+                }
+            }
+            // --- End auto-save questions ---
 
+            // --- UI Reset for Analysis --- 
+            if (analysisOutputPre) {
+                analysisOutputPre.textContent = ''; 
+                analysisOutputPre.style.color = '#333';
+            }
+            const exportBtn = document.getElementById('export-pdf-btn');
+            if(exportBtn) exportBtn.style.display = 'none';
+            const dlContainer = document.getElementById('download-link-container');
+            if(dlContainer) dlContainer.innerHTML = '';
+            const expStatus = document.getElementById('export-status');
+            if(expStatus) expStatus.textContent = '';
+            window.currentAnalysisJsonResultsForExport = null;
+
+            if(analysisSpinner) analysisSpinner.style.display = 'block';
+            if(progressContainer) progressContainer.style.display = 'none';
+            if(progressBar) progressBar.value = 0;
+            // --- End UI Reset ---
+
+            try {
+                appendToLog('Initiating analysis request...');
                 const response = await fetch('/run_analysis', {
                     method: 'POST',
-                    body: formData,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        call_pdf_path: callPdfPath,
+                        proposal_file_path: proposalFilePath,
+                        questions_file_path: questionsFilePath, 
+                        // Add checkbox states to the request
+                        analyze_proposal_opt: analyzeProposalOpt,
+                        spell_check_opt: spellCheckOpt,
+                        reviewer_feedback_opt: reviewerFeedbackOpt
+                        // nasa_pm_feedback_opt: nasaPmFeedbackOpt // Removed
+                    }),
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ message: 'Could not parse error response.' }));
+                    const errorData = await response.json();
                     throw new Error(errorData.message || `Server error: ${response.status}`);
                 }
-                
-                // Handle the streaming response directly
+                if (!response.body) throw new Error('Response body is null.');
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) {
-                        break;
-                    }
+                if(analysisSpinner && analysisSpinner.style.display !== 'block') analysisSpinner.style.display = 'block';
+                if(progressContainer) progressContainer.style.display = 'none'; 
 
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // Keep incomplete line in buffer
-
-                    for (const line of lines) {
-                        if (line.trim() === '') continue;
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const eventData = JSON.parse(line.slice(6)); // Remove 'data: ' prefix
-                                handleSseEvent(eventData);
-                            } catch (e) {
-                                console.error('Error parsing SSE data:', e, line);
+                async function processStream() {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            appendToLog('Analysis stream finished.');
+                            if(progressBar && progressBar.value < 100) progressBar.value = 100;
+                            if(analysisSpinner) analysisSpinner.style.display = 'none';
+                            break;
+                        }
+                        buffer += decoder.decode(value, { stream: true });
+                        let boundary = buffer.indexOf('\n\n');
+                        while (boundary !== -1) {
+                            const messageString = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 2);
+                            if (messageString.startsWith('data: ')) {
+                                const jsonDataString = messageString.substring(5);
+                                try {
+                                    const eventData = JSON.parse(jsonDataString);
+                                    handleSseEvent(eventData);
+                                } catch (e) {
+                                    console.error('Error parsing SSE JSON:', e, jsonDataString);
+                                    appendToLog(`Error parsing stream data: ${jsonDataString}`);
+                                }
                             }
+                            boundary = buffer.indexOf('\n\n');
                         }
                     }
                 }
-
-                // Process any remaining buffer content
-                if (buffer.trim() && buffer.startsWith('data: ')) {
-                    try {
-                        const eventData = JSON.parse(buffer.slice(6));
-                        handleSseEvent(eventData);
-                    } catch (e) {
-                        console.error('Error parsing final SSE data:', e, buffer);
-                    }
-                }
-
+                await processStream();
             } catch (error) {
-                console.error('Error during runAnalysisBtn click event:', error);
-                alert(`An error occurred: ${error.message}`);
+                console.error('Run Analysis Error:', error);
+                if (analysisOutputPre) {
+                    analysisOutputPre.textContent = `Error: ${error.message}`;
+                    analysisOutputPre.style.color = 'red';
+                }
                 if(analysisSpinner) analysisSpinner.style.display = 'none';
+                if(progressContainer) progressContainer.style.display = 'block';
+                if(progressBar) progressBar.value = 100;
+                appendToLog(`Client-side error during analysis: ${error.message}`);
             }
         });
-
-    } catch (error) {
-        console.error('A critical error occurred during script initialization:', error);
-        alert('A fatal error occurred while setting up the page. Please try refreshing.');
+    } else {
+        console.error('Run Analysis button not found!'); // Debug: Button not found
     }
 
     function appendToLog(message) {
@@ -294,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             if (item.type && item.type.endsWith('_error')) {
                                 feedbackItemDiv.innerHTML = `<p><strong>Error:</strong> ${item.explanation || 'An error occurred.'}</p>`;
                                 feedbackItemDiv.style.color = 'red';
-                            } else {
+                    } else { 
                                 const feedbackDisplayDiv = document.createElement('div');
                                 feedbackDisplayDiv.classList.add('feedback-content'); 
                                 const rawMarkdown = item.suggestion || 'N/A';

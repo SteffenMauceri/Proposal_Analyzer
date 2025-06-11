@@ -1,15 +1,16 @@
-# Byte-compiled / optimized / DLL files
+# Environment variables and secrets
+.env
+key.txt
+*.key
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-.DS_Store
-# Distribution / packaging
 .Python
 build/
+develop-eggs/
 dist/
 downloads/
 eggs/
@@ -20,11 +21,55 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Uploads and temporary files
+data/chat_uploads/
+data/main_uploads/
+exports/
+temp/
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
 
 # PyInstaller
 #  Usually these files are written by a PyInstaller script; this is misplaced
@@ -37,13 +82,10 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
-htmlcov/
 .tox/
 .nox/
-.coverage
 .coverage.* 
 .cache
-.pytest_cache/
 .hypothesis/
 
 # Translations
@@ -52,7 +94,6 @@ htmlcov/
 *.po
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -70,15 +111,9 @@ docs/_build/
 # PyBuilder
 target/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
 # IPython
 profile_default/
 ipython_config.py
-
-# pyenv
-.python-version
 
 # pipenv
 #   According to Peps Live Issues widget, this should only occur in Pipfile.lock
@@ -94,15 +129,6 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
-
-# Environments
-.env
-.venv
-venv/
-ENV/
-env/
-ENV.bak/
-venv.bak/
 
 # Spyder project settings
 .spyderproject
@@ -128,11 +154,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# VSCode
-.vscode/
-
 # Output files from this project
-key.txt # Assuming key.txt is sensitive and outside the repo as per plan 
 .idea/code.iml
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/inspectionProfiles/Project_Default.xml

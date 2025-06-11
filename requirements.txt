@@ -9,5 +9,5 @@ tqdm>=4.60.0 # Included in dev plan, but not actively used yet
 # pytest-cov>=4.0.0 # For test coverage, as in dev plan 
 Flask
 python-dotenv
-reportlab 
+reportlab
 gunicorn 

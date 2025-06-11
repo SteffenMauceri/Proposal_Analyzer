@@ -3,8 +3,6 @@ import subprocess
 import json
 from typing import List, Dict, Any, Optional, Callable, Iterator, Tuple
 import html
-import sys
-import os
 
 # Import for direct analysis
 from proposal_analyzer.analyzer import analyze as perform_proposal_analysis
@@ -29,7 +27,7 @@ class AnalysisService:
         reviewer_feedback_opt: bool = False
     ) -> List[str]:
         base_command = [
-            sys.executable, str(self.project_root / 'main.py'),
+            'python', str(self.project_root / 'main.py'),
             '--call-pdf', str(call_pdf_path.resolve()),
             '--model', model,
             '--output-format', 'json'  # Essential for service to parse results
@@ -72,7 +70,7 @@ class AnalysisService:
         if reviewer_feedback_opt:
             base_command.append('--reviewer-feedback')
         # else: base_command.append('--no-reviewer-feedback')
-
+        
         # Removed the old --selected-proposal logic that caused the error.
         # if selected_proposal_filenames and not ('--proposal-pdf' in base_command):
         #     for p_filename in selected_proposal_filenames:
@@ -214,90 +212,16 @@ class AnalysisService:
         if logger:
             logger.info(f"AnalysisService (blocking): Starting analysis with command: {' '.join(command)}")
         
-        # First, test if main.py is accessible
-        main_py_path = self.project_root / "main.py"
-        if not main_py_path.exists():
-            error_msg = f"main.py not found at {main_py_path}"
-            if logger:
-                logger.error(error_msg)
-            return None, error_msg
-        
-        # Test if we can run main.py --help
-        try:
-            test_command = [sys.executable, str(main_py_path), "--help"]
-            if logger:
-                logger.info(f"Testing main.py accessibility with: {' '.join(test_command)}")
-            
-            # Prepare environment for test too
-            test_env = os.environ.copy()
-            current_pythonpath = test_env.get('PYTHONPATH', '')
-            if current_pythonpath:
-                test_env['PYTHONPATH'] = f"{self.project_root}:{current_pythonpath}"
-            else:
-                test_env['PYTHONPATH'] = str(self.project_root)
-            
-            test_process = subprocess.run(
-                test_command, 
-                capture_output=True, 
-                text=True, 
-                timeout=30,
-                env=test_env,
-                cwd=str(self.project_root)
-            )
-            if test_process.returncode != 0:
-                error_msg = f"main.py test failed. Return code: {test_process.returncode}, stderr: {test_process.stderr}"
-                if logger:
-                    logger.error(error_msg)
-                return None, error_msg
-            if logger:
-                logger.info("main.py accessibility test passed")
-        except Exception as e:
-            error_msg = f"Failed to test main.py accessibility: {str(e)}"
-            if logger:
-                logger.error(error_msg)
-            return None, error_msg
-        
-        try:
-            logger.info(f"AnalysisService: Creating subprocess with command: {command}")
-            
-            # Prepare environment with PYTHONPATH so proposal_analyzer imports work
-            env = os.environ.copy()
-            current_pythonpath = env.get('PYTHONPATH', '')
-            if current_pythonpath:
-                env['PYTHONPATH'] = f"{self.project_root}:{current_pythonpath}"
-            else:
-                env['PYTHONPATH'] = str(self.project_root)
-            
-            logger.info(f"AnalysisService: Setting PYTHONPATH to: {env['PYTHONPATH']}")
-            
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                env=env,  # Use the modified environment
-                cwd=str(self.project_root)  # Set working directory to project root
-            )
-            logger.info(f"AnalysisService: Subprocess created with PID: {process.pid}")
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8'
+        )
 
-            # Capture stdout and stderr with timeout to prevent hanging
-            try:
-                logger.info("AnalysisService: Starting process.communicate() with 300s timeout")
-                stdout_data, stderr_data = process.communicate(timeout=300)  # 5 minute timeout
-                logger.info(f"AnalysisService: process.communicate() completed. Return code: {process.returncode}")
-            except subprocess.TimeoutExpired:
-                logger.error("AnalysisService: Process timed out, killing...")
-                process.kill()
-                stdout_data, stderr_data = process.communicate()
-                if logger:
-                    logger.error("AnalysisService (blocking): Process timed out after 5 minutes")
-                return None, "Analysis timed out after 5 minutes. The analysis may be too complex or there may be an API issue."
-        
-        except Exception as e:
-            if logger:
-                logger.error(f"AnalysisService: Exception while creating/running subprocess: {e}", exc_info=True)
-            return None, f"Failed to start analysis process: {str(e)}"
+        # Capture stdout and stderr
+        stdout_data, stderr_data = process.communicate()
 
         if logger:
             logger.info(f"AnalysisService (blocking): main.py process finished with return code: {process.returncode}")

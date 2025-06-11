@@ -42,7 +42,7 @@ def generate_consolidated_summary(
     logger_console: Optional[Console] = None # New argument for logging
 ) -> str:
     """Generates a consolidated summary of all findings using an LLM."""
-    
+
     services_with_findings_count = 0
     summary_prompt_parts = [
         f"The following automated analyses were performed on the proposal document: '{html.escape(proposal_filename)}'.\n"
@@ -52,10 +52,10 @@ def generate_consolidated_summary(
     if services_run.get("Core Analysis", False):
         analysis_items = all_findings.get("proposal_analysis")
         if analysis_items: # Check if there are actual findings
-            num_questions = len(analysis_items)
-            summary_prompt_parts.append(
+        num_questions = len(analysis_items)
+        summary_prompt_parts.append(
                 f"- Core Proposal Q&A: {num_questions} question(s) were addressed. Key insights should be reviewed in the detailed section."
-            )
+        )
             services_with_findings_count += 1
         else:
             summary_prompt_parts.append("- Core Proposal Q&A: Selected, but no findings were reported or an issue occurred.")
@@ -64,21 +64,21 @@ def generate_consolidated_summary(
     if services_run.get("Spell Check", False):
         spell_issues = all_findings.get("spell_check")
         if spell_issues: # Check if there are actual findings
-            if len(spell_issues) == 1 and spell_issues[0].get("type") == "error_extraction":
-                summary_prompt_parts.append("- Spell & Grammar Check: Failed to extract text from the document for spell checking.")
-            else:
+        if len(spell_issues) == 1 and spell_issues[0].get("type") == "error_extraction":
+            summary_prompt_parts.append("- Spell & Grammar Check: Failed to extract text from the document for spell checking.")
+        else:
                 # Filter out error_extraction type before counting issues for summary part
                 actual_issues = [issue for issue in spell_issues if issue.get('type') != "error_extraction" and issue.get("suggestion")]
                 num_spell_issues = len(actual_issues)
-                if num_spell_issues > 0:
+            if num_spell_issues > 0:
                     issue_types = list(set(issue.get('type', 'unknown') for issue in actual_issues))
-                    summary_prompt_parts.append(
+                summary_prompt_parts.append(
                         f"- Spell & Grammar Check: Identified {num_spell_issues} potential issue(s). Types included: {(', '.join(issue_types) if issue_types else 'various')}."
-                    )
+                )
                     services_with_findings_count += 1
                 else:
                     summary_prompt_parts.append("- Spell & Grammar Check: No actionable spelling or grammar issues were identified (though the service ran).")
-        else:
+            else:
             summary_prompt_parts.append("- Spell & Grammar Check: Selected, but no findings were reported or an issue occurred.")
 
     # Reviewer Feedback Summary
@@ -209,18 +209,18 @@ def _display_rich_results(all_results: Dict[str, List[Dict[str, Any]]], llm_inst
                         border_style="red"
                     ))
                 elif item.get('service_name', '').endswith('(placeholder)'): # Original placeholder display
-                    console.print(Panel(
-                        Text(item.get("explanation", "N/A"), style="italic yellow"), 
-                        title=f"[bold yellow]{item.get('service_name', 'Placeholder Service')}[/bold yellow]", 
-                        border_style="yellow"
-                    ))
+                console.print(Panel(
+                    Text(item.get("explanation", "N/A"), style="italic yellow"), 
+                    title=f"[bold yellow]{item.get('service_name', 'Placeholder Service')}[/bold yellow]", 
+                    border_style="yellow"
+                ))
                 else: # Actual feedback display
-                    console.print(Panel(
+                console.print(Panel(
                         Text(item.get("suggestion", "N/A"), style="white"), 
                         title=f"[bold green]{item.get('service_name', 'Feedback Service')}[/bold green]", 
                         subtitle=f"[italic dim]{item.get('original_snippet', '')} - {item.get('explanation', '')}[/italic dim]",
                         border_style="green"
-                    ))
+                ))
         else: # Generic fallback for other result types
             for item in findings:
                 console.print(item)
@@ -328,7 +328,7 @@ def main_cli(
             analysis_findings = analysis_service.analyze_proposal_directly(
                 call_pdf_path_str=str(call_pdf),
                 proposal_pdf_path_str=str(proposal_pdf_path),
-                questions_file_path_str=str(questions_file),
+                questions_file_path_str=str(questions_file), 
                 model_name=model,
                 llm_instructions=effective_llm_instructions,
                 logger=None # Or pass a logger if you have one configured for CLI
@@ -367,7 +367,7 @@ def main_cli(
                 spell_check_findings = spell_checking_service.check_document_text(proposal_text_content, is_pdf_source=True)
             else:
                 # Fallback to original method if text extraction failed above but service tries again
-                spell_check_findings = spell_checking_service.check_pdf_document(proposal_pdf_path)
+            spell_check_findings = spell_checking_service.check_pdf_document(proposal_pdf_path)
             all_results_for_proposal["spell_check"] = spell_check_findings
         else:
             effective_info_console.print("Skipping spell check.")
