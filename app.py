@@ -7,6 +7,9 @@ import html
 import secrets
 import re
 import tempfile
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 # PDF Generation
 from reportlab.lib.pagesizes import letter, landscape
@@ -190,14 +193,10 @@ def run_analysis():
         selected_proposal_filenames = [proposal_file_path.name]
         model = "gpt-4.1-mini" # Hardcoded model
 
-        def generate_stream_from_service():
+        def run_analysis_in_thread():
+            """Run analysis in a separate thread to prevent worker blocking"""
             try:
-                # Send initial status
-                yield f"data: {json.dumps({'type': 'log', 'message': 'Starting analysis...'})}\n\n"
-                yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Initializing analysis process...'}})}\n\n"
-                
-                # Use blocking analysis instead of streaming subprocess to avoid memory issues
-                analysis_results, error_message = analysis_service.run_analysis_blocking(
+                return analysis_service.run_analysis_blocking(
                     call_pdf_path=call_pdf_path,
                     proposals_dir_path=proposals_dir_path,
                     questions_file_path=questions_file_path,
@@ -208,6 +207,28 @@ def run_analysis():
                     spell_check_opt=spell_check_opt,
                     reviewer_feedback_opt=reviewer_feedback_opt
                 )
+            except Exception as e:
+                app.logger.error(f"Error in analysis thread: {e}", exc_info=True)
+                return None, str(e)
+
+        def generate_stream_from_service():
+            try:
+                # Send initial status
+                yield f"data: {json.dumps({'type': 'log', 'message': 'Starting analysis...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Initializing analysis process...'}})}\n\n"
+                
+                # Run analysis in thread pool to avoid blocking the worker
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_analysis_in_thread)
+                    
+                    # Send periodic progress updates while waiting
+                    while not future.done():
+                        yield f"data: {json.dumps({'type': 'progress', 'data': {'message': 'Analysis in progress...'}})}\n\n"
+                        import time
+                        time.sleep(5)  # Update every 5 seconds
+                    
+                    # Get the result
+                    analysis_results, error_message = future.result()
                 
                 if error_message:
                     app.logger.error(f"Analysis failed: {error_message}")
