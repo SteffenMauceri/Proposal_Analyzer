@@ -97,8 +97,48 @@ document.addEventListener('DOMContentLoaded', function () {
                     throw new Error(errorData.message || `Server error: ${response.status}`);
                 }
                 
-                // ... rest of the streaming logic
-                // ... (omitted for brevity, no changes needed here)
+                // Handle the streaming response directly
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                console.log('Starting to read streaming response...');
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        console.log('Streaming response completed');
+                        break;
+                    }
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (line.trim() === '') continue;
+                        if (line.startsWith('data: ')) {
+                            console.log('Received SSE line:', line);
+                            try {
+                                const eventData = JSON.parse(line.slice(6)); // Remove 'data: ' prefix
+                                handleSseEvent(eventData);
+                            } catch (e) {
+                                console.error('Error parsing SSE data:', e, line);
+                            }
+                        }
+                    }
+                }
+
+                // Process any remaining buffer content
+                if (buffer.trim() && buffer.startsWith('data: ')) {
+                    console.log('Processing final buffer:', buffer);
+                    try {
+                        const eventData = JSON.parse(buffer.slice(6));
+                        handleSseEvent(eventData);
+                    } catch (e) {
+                        console.error('Error parsing final SSE data:', e, buffer);
+                    }
+                }
 
             } catch (error) {
                 console.error('Error during runAnalysisBtn click event:', error);
