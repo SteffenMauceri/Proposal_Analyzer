@@ -142,10 +142,6 @@ def load_path_data_route():
         app.logger.error(f"Error in /load_path_data: {e}", exc_info=True)
         return jsonify(success=False, message=str(e)), 500
 
-@app.route('/test', methods=['POST'])
-def test_endpoint():
-    return jsonify(success=True, message="Test endpoint working!")
-
 @app.route('/run_analysis', methods=['POST'])
 def run_analysis():
     if 'proposal_pdf' not in request.files or 'call_pdf' not in request.files:

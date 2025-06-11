@@ -17,14 +17,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const progressContainer = document.getElementById('progress-container');
         const progressBar = document.getElementById('analysis-progress-bar');
 
-        // Debug: Check if elements are found
-        console.log('callPdfPathInput:', callPdfPathInput);
-        console.log('proposalFilePathHiddenInput:', proposalFilePathHiddenInput);
-        console.log('questionsFilePathInput:', questionsFilePathInput);
-        console.log('questionsContentTextarea:', questionsContentTextarea);
-        console.log('runAnalysisBtn:', runAnalysisBtn);
-        console.log('analysisOutputPre:', analysisOutputPre);
-
         // Export related elements (referenced by inline script in index.html, but listed here for context if needed)
         // const exportPdfBtn = document.getElementById('export-pdf-btn');
         // const exportStatusP = document.getElementById('export-status');
@@ -59,29 +51,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Log all elements found for debugging
-        console.log('All elements found:', {
-            runAnalysisBtn: !!runAnalysisBtn,
-            callPdfFileInput: !!callPdfFileInput,
-            proposalFileInput: !!proposalFileInput,
-            analysisOutputPre: !!analysisOutputPre,
-            analyzeProposalOptCheckbox: !!analyzeProposalOptCheckbox,
-            spellCheckOptCheckbox: !!spellCheckOptCheckbox,
-            reviewerFeedbackOptCheckbox: !!reviewerFeedbackOptCheckbox
-        });
-
         runAnalysisBtn.addEventListener('click', async () => {
             try {
                 console.log('Run Analysis button clicked');
-                console.log('Button element:', runAnalysisBtn);
 
                 const callPdfFile = callPdfFileInput.files[0];
                 const proposalFile = proposalFileInput.files[0];
-
-                console.log('Files selected:', {
-                    callPdfFile: callPdfFile ? callPdfFile.name : 'None',
-                    proposalFile: proposalFile ? proposalFile.name : 'None'
-                });
 
                 if (!callPdfFile) {
                     alert('Call Document must be uploaded.');
@@ -127,12 +102,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const decoder = new TextDecoder();
                 let buffer = '';
 
-                console.log('Starting to read streaming response...');
-
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
-                        console.log('Streaming response completed');
                         break;
                     }
 
@@ -143,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     for (const line of lines) {
                         if (line.trim() === '') continue;
                         if (line.startsWith('data: ')) {
-                            console.log('Received SSE line:', line);
                             try {
                                 const eventData = JSON.parse(line.slice(6)); // Remove 'data: ' prefix
                                 handleSseEvent(eventData);
@@ -156,7 +127,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Process any remaining buffer content
                 if (buffer.trim() && buffer.startsWith('data: ')) {
-                    console.log('Processing final buffer:', buffer);
                     try {
                         const eventData = JSON.parse(buffer.slice(6));
                         handleSseEvent(eventData);
@@ -171,32 +141,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if(analysisSpinner) analysisSpinner.style.display = 'none';
             }
         });
-
-        // Test connection button
-        const testBtn = document.getElementById('test-btn');
-        if (testBtn) {
-            testBtn.addEventListener('click', async () => {
-                try {
-                    console.log('Test button clicked');
-                    const response = await fetch('/test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({})
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    
-                    const data = await response.json();
-                    console.log('Test response:', data);
-                    alert(`Test successful: ${data.message}`);
-                } catch (error) {
-                    console.error('Test failed:', error);
-                    alert(`Test failed: ${error.message}`);
-                }
-            });
-        }
 
     } catch (error) {
         console.error('A critical error occurred during script initialization:', error);
