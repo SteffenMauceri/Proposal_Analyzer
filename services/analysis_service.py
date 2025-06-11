@@ -23,7 +23,6 @@ class AnalysisService:
         model: str,
         selected_proposal_filenames: Optional[List[str]] = None,
         analyze_proposal_opt: bool = True,
-        spell_check_opt: bool = False,
         reviewer_feedback_opt: bool = False
     ) -> List[str]:
         base_command = [
@@ -63,10 +62,6 @@ class AnalysisService:
         if not analyze_proposal_opt: # Typer uses --no-analyze-proposal to disable
             base_command.append('--no-analyze-proposal')
         
-        if spell_check_opt:
-            base_command.append('--spell-check')
-        # else: base_command.append('--no-spell-check') # No need, it's default off in main.py
-
         if reviewer_feedback_opt:
             base_command.append('--reviewer-feedback')
         # else: base_command.append('--no-reviewer-feedback')
@@ -87,7 +82,6 @@ class AnalysisService:
         selected_proposal_filenames: Optional[List[str]] = None,
         logger: Optional[Any] = None, # Pass Flask app.logger or any logger
         analyze_proposal_opt: bool = True,
-        spell_check_opt: bool = False,
         reviewer_feedback_opt: bool = False
     ) -> Iterator[str]:
         """
@@ -101,7 +95,6 @@ class AnalysisService:
             model,
             selected_proposal_filenames,
             analyze_proposal_opt,
-            spell_check_opt,
             reviewer_feedback_opt
         )
 
@@ -197,7 +190,6 @@ class AnalysisService:
         logger: Optional[Any] = None,
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         analyze_proposal_opt: bool = True,
-        spell_check_opt: bool = False,
         reviewer_feedback_opt: bool = False
     ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         """
@@ -212,7 +204,6 @@ class AnalysisService:
             model,
             selected_proposal_filenames,
             analyze_proposal_opt,
-            spell_check_opt,
             reviewer_feedback_opt
         )
 
