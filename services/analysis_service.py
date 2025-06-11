@@ -3,6 +3,7 @@ import subprocess
 import json
 from typing import List, Dict, Any, Optional, Callable, Iterator, Tuple
 import html
+import os
 
 # Import for direct analysis
 from proposal_analyzer.analyzer import analyze as perform_proposal_analysis
@@ -109,13 +110,23 @@ class AnalysisService:
             logger.info(f"AnalysisService: Starting analysis with command: {' '.join(command)}")
         yield f"data: {json.dumps({'type': 'log', 'message': 'Analysis process starting via AnalysisService...'})}\n\n"
 
+        # Ensure environment variables are passed to the subprocess
+        env = os.environ.copy()
+        # Explicitly check if OPENAI_API_KEY is available
+        if not env.get('OPENAI_API_KEY'):
+            if logger:
+                logger.warning("OPENAI_API_KEY not found in environment variables")
+            yield f"data: {json.dumps({'type': 'error', 'message': 'OPENAI_API_KEY environment variable not set'})}\n\n"
+            return
+
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            bufsize=1  # Line buffered
+            bufsize=1,  # Line buffered
+            env=env  # Pass environment variables to subprocess
         )
 
         # Stream stderr for logs and progress
@@ -212,12 +223,22 @@ class AnalysisService:
         if logger:
             logger.info(f"AnalysisService (blocking): Starting analysis with command: {' '.join(command)}")
         
+        # Ensure environment variables are passed to the subprocess
+        env = os.environ.copy()
+        # Explicitly check if OPENAI_API_KEY is available
+        if not env.get('OPENAI_API_KEY'):
+            error_msg = "OPENAI_API_KEY environment variable not set"
+            if logger:
+                logger.error(error_msg)
+            return None, error_msg
+        
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8'
+            encoding='utf-8',
+            env=env  # Pass environment variables to subprocess
         )
 
         # Capture stdout and stderr
