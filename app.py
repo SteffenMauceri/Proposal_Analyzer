@@ -20,10 +20,12 @@ from utils.file_helpers import get_proposals_from_dir, read_questions_content, g
 from services.pdf_export_service import PDFExportService
 from services.analysis_service import AnalysisService # Import the service
 
-app = Flask(__name__)
-
 # Define project root for easier path construction
 PROJECT_ROOT = Path(__file__).parent
+
+app = Flask(__name__,
+            static_folder=str(PROJECT_ROOT / 'static'),
+            template_folder=str(PROJECT_ROOT / 'templates'))
 
 # Defaults for initial page load
 app.config['DEFAULT_CALL_FILES_DIR'] = PROJECT_ROOT / 'data' / 'call'
