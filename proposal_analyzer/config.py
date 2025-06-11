@@ -2,8 +2,8 @@ from pathlib import Path
 import os
 
 def get_api_key() -> str:
-    # First, try to read from the text file.
-    key_path = Path(__file__).resolve().parent.parent.parent.joinpath("key.txt")
+    # First, try to read from the text file in the project root.
+    key_path = Path(__file__).resolve().parent.parent.joinpath("key.txt")
     try:
         if key_path.is_file():
             api_key = key_path.read_text().strip()
@@ -20,6 +20,6 @@ def get_api_key() -> str:
         return api_key
 
     raise ValueError(
-        "OpenAI API key not found. Please create key.txt, "
+        "OpenAI API key not found. Please create key.txt in the project root, "
         "or set the 'openai-key' or 'OPENAI_API_KEY' environment variable."
     ) 

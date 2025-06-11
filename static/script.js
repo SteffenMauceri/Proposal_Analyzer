@@ -49,16 +49,39 @@ document.addEventListener('DOMContentLoaded', function () {
         // Check if essential elements exist
         if (!runAnalysisBtn || !callPdfFileInput || !proposalFileInput || !analysisOutputPre) {
             console.error('A critical element is missing from the page. Analysis cannot run.');
+            console.error('Missing elements:', {
+                runAnalysisBtn: !!runAnalysisBtn,
+                callPdfFileInput: !!callPdfFileInput,
+                proposalFileInput: !!proposalFileInput,
+                analysisOutputPre: !!analysisOutputPre
+            });
             alert('Error: A critical UI element could not be found. Please contact support.');
             return;
         }
 
+        // Log all elements found for debugging
+        console.log('All elements found:', {
+            runAnalysisBtn: !!runAnalysisBtn,
+            callPdfFileInput: !!callPdfFileInput,
+            proposalFileInput: !!proposalFileInput,
+            analysisOutputPre: !!analysisOutputPre,
+            analyzeProposalOptCheckbox: !!analyzeProposalOptCheckbox,
+            spellCheckOptCheckbox: !!spellCheckOptCheckbox,
+            reviewerFeedbackOptCheckbox: !!reviewerFeedbackOptCheckbox
+        });
+
         runAnalysisBtn.addEventListener('click', async () => {
             try {
                 console.log('Run Analysis button clicked');
+                console.log('Button element:', runAnalysisBtn);
 
                 const callPdfFile = callPdfFileInput.files[0];
                 const proposalFile = proposalFileInput.files[0];
+
+                console.log('Files selected:', {
+                    callPdfFile: callPdfFile ? callPdfFile.name : 'None',
+                    proposalFile: proposalFile ? proposalFile.name : 'None'
+                });
 
                 if (!callPdfFile) {
                     alert('Call Document must be uploaded.');
@@ -69,6 +92,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
                 
+                console.log('File validation passed, proceeding with analysis...');
+
                 // Continue with the rest of the function...
                 const questionsContentToSave = questionsContentTextarea ? questionsContentTextarea.value.trim() : '';
                 const analyzeProposalOpt = analyzeProposalOptCheckbox ? analyzeProposalOptCheckbox.checked : false;
@@ -146,6 +171,32 @@ document.addEventListener('DOMContentLoaded', function () {
                 if(analysisSpinner) analysisSpinner.style.display = 'none';
             }
         });
+
+        // Test connection button
+        const testBtn = document.getElementById('test-btn');
+        if (testBtn) {
+            testBtn.addEventListener('click', async () => {
+                try {
+                    console.log('Test button clicked');
+                    const response = await fetch('/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Test response:', data);
+                    alert(`Test successful: ${data.message}`);
+                } catch (error) {
+                    console.error('Test failed:', error);
+                    alert(`Test failed: ${error.message}`);
+                }
+            });
+        }
 
     } catch (error) {
         console.error('A critical error occurred during script initialization:', error);
