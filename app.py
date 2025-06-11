@@ -27,6 +27,10 @@ app = Flask(__name__,
             static_folder=str(PROJECT_ROOT / 'static'),
             template_folder=str(PROJECT_ROOT / 'templates'))
 
+# Ensure static and template directories exist
+(PROJECT_ROOT / 'static').mkdir(exist_ok=True)
+(PROJECT_ROOT / 'templates').mkdir(exist_ok=True)
+
 # Defaults for initial page load
 app.config['DEFAULT_CALL_FILES_DIR'] = PROJECT_ROOT / 'data' / 'call'
 app.config['DEFAULT_PROPOSALS_DIR'] = str(PROJECT_ROOT / 'data' / 'proposal')
@@ -350,6 +354,25 @@ def upload_main_document():
             return jsonify(success=False, message=f"Could not save file: {str(e)}"), 500
             
     return jsonify(success=False, message="File upload failed for an unknown reason."), 500
+
+@app.route('/debug/static')
+def debug_static():
+    """Debug route to check static file configuration"""
+    static_dir = Path(app.static_folder)
+    files = []
+    if static_dir.exists():
+        for file in static_dir.iterdir():
+            if file.is_file():
+                files.append({
+                    'name': file.name,
+                    'size': file.stat().st_size,
+                    'path': str(file)
+                })
+    return jsonify({
+        'static_folder': app.static_folder,
+        'static_folder_exists': static_dir.exists(),
+        'files': files
+    })
 
 if __name__ == "__main__":
     # This block is for local development.

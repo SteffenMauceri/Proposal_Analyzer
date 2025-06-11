@@ -2,12 +2,12 @@ services:
   - type: web
     name: proposal-analyzer
     env: python
-    pythonVersion: "3.9"
+    pythonVersion: "3.11"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn --bind 0.0.0.0:$PORT --timeout 600 --keep-alive 2 --max-requests 1000 --max-requests-jitter 50 app:app"
     envVars:
       - key: PYTHON_VERSION
-        value: "3.9"
+        value: "3.11"
       - key: FLASK_APP
         value: "app.py"
       - key: FLASK_ENV
