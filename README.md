@@ -108,7 +108,6 @@ This application is configured for easy deployment on [Render.com](https://rende
      FLASK_ENV=production
      FLASK_DEBUG=false
      ```
-   - **CRITICAL**: The `OPENAI_API_KEY` is required for the application to function. Without it, analysis requests will fail.
 
 6. **Deploy:**
    - Click "Create Web Service"
@@ -122,7 +121,7 @@ This repository includes a `render.yaml` file for Infrastructure as Code deploym
 1. **Push the `render.yaml` file** to your repository.
 2. **In Render dashboard**, click "New +" → "Blueprint"
 3. **Connect your repository** and Render will automatically detect the `render.yaml` configuration.
-4. **Set the `OPENAI_API_KEY`** environment variable in the dashboard (REQUIRED - the app will not work without this).
+4. **Set the `OPENAI_API_KEY`** environment variable in the dashboard.
 
 ### Important Notes for Render Deployment
 

@@ -3,7 +3,6 @@ import subprocess
 import json
 from typing import List, Dict, Any, Optional, Callable, Iterator, Tuple
 import html
-import os
 
 # Import for direct analysis
 from proposal_analyzer.analyzer import analyze as perform_proposal_analysis
@@ -110,23 +109,13 @@ class AnalysisService:
             logger.info(f"AnalysisService: Starting analysis with command: {' '.join(command)}")
         yield f"data: {json.dumps({'type': 'log', 'message': 'Analysis process starting via AnalysisService...'})}\n\n"
 
-        # Ensure environment variables are passed to the subprocess
-        env = os.environ.copy()
-        # Explicitly check if OPENAI_API_KEY is available
-        if not env.get('OPENAI_API_KEY'):
-            if logger:
-                logger.warning("OPENAI_API_KEY not found in environment variables")
-            yield f"data: {json.dumps({'type': 'error', 'message': 'OPENAI_API_KEY environment variable not set'})}\n\n"
-            return
-
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            bufsize=1,  # Line buffered
-            env=env  # Pass environment variables to subprocess
+            bufsize=1  # Line buffered
         )
 
         # Stream stderr for logs and progress
@@ -136,7 +125,8 @@ class AnalysisService:
                 if not line_stripped:
                     continue
                 if logger:
-                    logger.debug(f"AnalysisService (stderr from main.py): {line_stripped}")
+                    # Promote to ERROR so messages appear even when app logger is INFO on Render
+                    logger.error(f"AnalysisService (stderr from main.py): {line_stripped}")
                 
                 event_data = {}
                 if line_stripped.startswith("PROGRESS:"):
@@ -159,13 +149,19 @@ class AnalysisService:
         if stderr_data_after_wait:
             for line in stderr_data_after_wait.strip().split('\n'):
                 if line.strip() and logger:
-                    logger.debug(f"AnalysisService (Remaining stderr from main.py): {html.escape(line.strip())}")
+                    # Promote to ERROR so messages appear even when app logger is INFO on Render
+                    logger.error(f"AnalysisService (Remaining stderr from main.py): {html.escape(line.strip())}")
                     yield f"data: {json.dumps({'type': 'log', 'message': f'Post-stream stderr: {html.escape(line.strip())}'})}\n\n"
 
         if process.returncode != 0:
             error_message = f"Analysis script failed (exit code {process.returncode})."
             if logger:
                 logger.error(error_message)
+                # Dump captured stdout/stderr to help debugging on Render
+                if stdout_data:
+                    logger.error(f"main.py stdout:\n{stdout_data.strip()}")
+                if stderr_data_after_wait:
+                    logger.error(f"main.py stderr:\n{stderr_data_after_wait.strip()}")
             details = html.escape(stdout_data.strip()) if stdout_data else ''
             if stderr_data_after_wait: # Append any crucial error output from stderr if not already in stdout
                  details += f" Stderr: {html.escape(stderr_data_after_wait.strip())}"
@@ -223,22 +219,12 @@ class AnalysisService:
         if logger:
             logger.info(f"AnalysisService (blocking): Starting analysis with command: {' '.join(command)}")
         
-        # Ensure environment variables are passed to the subprocess
-        env = os.environ.copy()
-        # Explicitly check if OPENAI_API_KEY is available
-        if not env.get('OPENAI_API_KEY'):
-            error_msg = "OPENAI_API_KEY environment variable not set"
-            if logger:
-                logger.error(error_msg)
-            return None, error_msg
-        
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8',
-            env=env  # Pass environment variables to subprocess
+            encoding='utf-8'
         )
 
         # Capture stdout and stderr
