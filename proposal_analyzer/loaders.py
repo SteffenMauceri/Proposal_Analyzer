@@ -15,7 +15,10 @@ def load_pdf(path: str) -> str:
         reader = PyPDF2.PdfReader(f)
         for page_num in range(len(reader.pages)):
             page = reader.pages[page_num]
-            text_content.append(page.extract_text())
+            page_text = page.extract_text()
+            # PyPDF2.extract_text() can return None for pages with no extractable text.
+            # Replace None with empty string to avoid TypeError during join.
+            text_content.append(page_text if page_text is not None else "")
     return "\n".join(text_content)
 
 
