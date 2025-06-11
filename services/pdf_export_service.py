@@ -232,6 +232,35 @@ class PDFExportService:
                         story.append(Paragraph(html.escape(str(answer_raw)), normal_style))
                     story.append(Spacer(1, 0.15*inch))
 
+            elif service_key == "spell_check":
+                if not findings_list or (len(findings_list) == 1 and findings_list[0].get("type") == "error_extraction"):
+                    story.append(Paragraph(findings_list[0].get("explanation", "Could not process document for spell check."), error_style if findings_list else normal_style))
+                else:
+                    for issue in findings_list:
+                        original_snippet = html.escape(issue.get('original_snippet', 'N/A'))
+                        suggestion = html.escape(issue.get('suggestion', 'N/A'))
+                        issue_type = html.escape(issue.get('type', 'N/A'))
+                        explanation = html.escape(issue.get('explanation', 'No explanation provided.'))
+                        line_num = issue.get('line_number', -1)
+                        line_content = html.escape(issue.get('line_with_error', ''))
+                        char_offset = issue.get('char_offset_start_in_doc', 'N/A')
+
+                        location_info = ""
+                        if line_num != -1 and line_num is not None:
+                            location_info = f"<b>Line {line_num}</b> (approx. offset {char_offset})"
+                            if line_content:
+                                story.append(Paragraph(f"<i>Context: {line_content}</i>", self.styles['Italic']))
+                        else: # PDF or no line number
+                            location_info = f"<b>Offset {char_offset}</b> (exact)"
+                        
+                        story.append(Paragraph(location_info, normal_style))
+                        story.append(Paragraph(f"<b>Found:</b> <font color='red'>{original_snippet}</font> (<i>Type: {issue_type}</i>)", normal_style))
+                        story.append(Paragraph(f"<b>Suggestion:</b> <font color='green'>{suggestion}</font>", normal_style))
+                        if explanation and explanation != "N/A" and explanation != "No explanation provided.":
+                             story.append(Paragraph(f"<b>Explanation:</b> {explanation}", suggestion_style))
+                        story.append(Spacer(1, 0.1*inch))
+                story.append(Spacer(1, 0.15*inch))
+            
             elif service_key == "reviewer_feedback":
                  for item in findings_list:
                     # Check if it's an error from the service itself
@@ -248,13 +277,43 @@ class PDFExportService:
                     else: # Actual feedback display
                         service_name = html.escape(item.get("service_name", "Expert Reviewer Feedback"))
                         feedback_content = item.get("suggestion", "N/A")
+                        explanation = item.get("explanation", "")
                         
-                        # Process for PDF: convert newlines to <br/>
-                        feedback_display = html.escape(feedback_content).replace("\\n", "<br/>")
-                        story.append(Paragraph(feedback_display, normal_style))
-                    story.append(Spacer(1, 0.15*inch))
+                        story.append(Paragraph(f"<b>{service_name}:</b>", h3_style))
+                        story.append(Spacer(1, 0.05*inch))
+                        
+                        # Handle feedback content similar to proposal analysis answers
+                        # The feedback may contain markdown-like formatting from the LLM
+                        if isinstance(feedback_content, str) and feedback_content != "N/A":
+                            # Basic preprocessing for PDF display
+                            feedback_display = html.escape(feedback_content)
+                            
+                            # Convert common markdown patterns to basic HTML
+                            # Bold: **text** -> <b>text</b>
+                            feedback_display = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', feedback_display)
+                            
+                            # Handle newlines for better PDF formatting
+                            feedback_display = feedback_display.replace('\n\n', '<br/><br/>')
+                            feedback_display = feedback_display.replace('\n', '<br/>')
+                            
+                            # Handle bullet points that might start with - or •
+                            feedback_display = re.sub(r'<br/>[-•]\s*', r'<br/>&nbsp;&nbsp;&nbsp;&nbsp;• ', feedback_display)
+                            
+                            # Handle numbered lists
+                            feedback_display = re.sub(r'<br/>(\d+\.)\s*', r'<br/>&nbsp;&nbsp;&nbsp;&nbsp;\1 ', feedback_display)
+                            
+                            story.append(Paragraph(feedback_display, normal_style))
+                        else:
+                            story.append(Paragraph("No feedback content available.", normal_style))
+                        
+                        # Add explanation if available and meaningful
+                        if explanation and explanation != "N/A" and explanation.strip():
+                            story.append(Spacer(1, 0.05*inch))
+                            story.append(Paragraph(f"<i>{html.escape(explanation)}</i>", suggestion_style))
+                        
+                        story.append(Spacer(1, 0.15*inch))
 
-            else: # Generic fallback for any other service type
+            else: # Generic fallback for any other future service types
                 story.append(Paragraph(f"<i>Note: Unknown service type '{service_key}'. Displaying raw data:</i>", self.styles['Italic']))
                 story.append(Spacer(1, 0.05*inch))
                 for item in findings_list:
