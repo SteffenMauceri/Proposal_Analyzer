@@ -275,7 +275,7 @@ def export_pdf():
         
         if generated_pdf_path:
             app.logger.info(f"Comprehensive PDF exported successfully to {generated_pdf_path}")
-        return jsonify(success=True, message=f"PDF exported successfully to {server_pdf_filename}", filename_server=server_pdf_filename)
+            return jsonify(success=True, message=f"PDF exported successfully to {server_pdf_filename}", filename_server=server_pdf_filename)
         else:
             app.logger.error(f"Failed to generate PDF for {proposal_filename_original}")
             return jsonify(success=False, message="Failed to generate PDF report."), 500
