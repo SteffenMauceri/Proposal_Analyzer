@@ -3,6 +3,8 @@ import subprocess
 import json
 from typing import List, Dict, Any, Optional, Callable, Iterator, Tuple
 import html
+import sys
+import os
 
 # Import for direct analysis
 from proposal_analyzer.analyzer import analyze as perform_proposal_analysis
@@ -27,7 +29,7 @@ class AnalysisService:
         reviewer_feedback_opt: bool = False
     ) -> List[str]:
         base_command = [
-            'python', str(self.project_root / 'main.py'),
+            sys.executable, str(self.project_root / 'main.py'),
             '--call-pdf', str(call_pdf_path.resolve()),
             '--model', model,
             '--output-format', 'json'  # Essential for service to parse results
@@ -222,10 +224,26 @@ class AnalysisService:
         
         # Test if we can run main.py --help
         try:
-            test_command = ["python", str(main_py_path), "--help"]
+            test_command = [sys.executable, str(main_py_path), "--help"]
             if logger:
                 logger.info(f"Testing main.py accessibility with: {' '.join(test_command)}")
-            test_process = subprocess.run(test_command, capture_output=True, text=True, timeout=30)
+            
+            # Prepare environment for test too
+            test_env = os.environ.copy()
+            current_pythonpath = test_env.get('PYTHONPATH', '')
+            if current_pythonpath:
+                test_env['PYTHONPATH'] = f"{self.project_root}:{current_pythonpath}"
+            else:
+                test_env['PYTHONPATH'] = str(self.project_root)
+            
+            test_process = subprocess.run(
+                test_command, 
+                capture_output=True, 
+                text=True, 
+                timeout=30,
+                env=test_env,
+                cwd=str(self.project_root)
+            )
             if test_process.returncode != 0:
                 error_msg = f"main.py test failed. Return code: {test_process.returncode}, stderr: {test_process.stderr}"
                 if logger:
@@ -241,12 +259,25 @@ class AnalysisService:
         
         try:
             logger.info(f"AnalysisService: Creating subprocess with command: {command}")
+            
+            # Prepare environment with PYTHONPATH so proposal_analyzer imports work
+            env = os.environ.copy()
+            current_pythonpath = env.get('PYTHONPATH', '')
+            if current_pythonpath:
+                env['PYTHONPATH'] = f"{self.project_root}:{current_pythonpath}"
+            else:
+                env['PYTHONPATH'] = str(self.project_root)
+            
+            logger.info(f"AnalysisService: Setting PYTHONPATH to: {env['PYTHONPATH']}")
+            
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                encoding='utf-8'
+                encoding='utf-8',
+                env=env,  # Use the modified environment
+                cwd=str(self.project_root)  # Set working directory to project root
             )
             logger.info(f"AnalysisService: Subprocess created with PID: {process.pid}")
 
