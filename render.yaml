@@ -12,7 +12,7 @@ services:
         value: "app.py"
       - key: FLASK_ENV
         value: "production"
-      - key: openai-key
+      - key: OPENAI_API_KEY
         sync: false # Set this in the Render dashboard
       - key: FLASK_SECRET_KEY
         generateValue: true # Let Render generate a secret key 
