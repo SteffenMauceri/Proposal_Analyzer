@@ -20,7 +20,7 @@ def analyze(
     Analyzes a proposal against a call for proposals and a list of questions.
 
     Args:
-        call_p: Path to the call for proposal document (PDF).
+        call_p: Path to the call for proposal document (PDF or DOCX).
         prop_p: Path to the proposal document (PDF or DOCX).
         q_p: Path to the text file containing questions (one per line).
         model: The language model to use for evaluation.
@@ -32,7 +32,7 @@ def analyze(
         for a question (question, answer, reasoning, raw_response).
     """
     ctx: Dict[str, str] = {
-        "call": load_pdf(call_p),
+        "call": (load_pdf if call_p.lower().endswith(".pdf") else load_docx)(call_p),
         "proposal": (load_pdf if prop_p.lower().endswith(".pdf") else load_docx)(prop_p),
     }
     
