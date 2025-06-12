@@ -210,27 +210,52 @@ class PDFExportService:
             story.append(Spacer(1, 0.1*inch))
 
             if service_key == "proposal_analysis":
+                # Create a table matching the web UI format
+                table_data = [['Question', 'Answer', 'Reasoning']]  # Header row
+                
                 for item in findings_list:
                     question = html.escape(item.get("question", "N/A"))
-                    answer_raw = item.get("answer", "N/A") # This is the raw answer from LLM (can be long)
                     
-                    story.append(Paragraph(f"<b>Question:</b> {question}", h3_style))
-                    story.append(Spacer(1, 0.05*inch))
+                    # Get answer status
+                    answer_bool = item.get("answer")
+                    if answer_bool is True:
+                        answer_text = "YES"
+                        answer_color = colors.green
+                    elif answer_bool is False:
+                        answer_text = "NO"
+                        answer_color = colors.red
+                    else:
+                        answer_text = "Unsure"
+                        answer_color = colors.orange
                     
-                    # Displaying the LLM's answer - might contain markdown-like formatting
-                    # For PDF, we can't render markdown directly, so we present it as preformatted text if it's complex
-                    if isinstance(answer_raw, str) and ("\\n" in answer_raw or "```" in answer_raw or len(answer_raw) > 200):
-                        # Simple pre-processing for PDF display
-                        answer_display = html.escape(answer_raw).replace("\\n", "<br/>")
-                        # Basic handling of code blocks for visual separation
-                        answer_display = re.sub(r'```(\w*\s*)', r'<br/><b>--- Code Block (\1) ---</b><br/>', answer_display)
-                        answer_display = answer_display.replace("```", "<br/><b>--- End Code Block ---</b><br/>")
-                        story.append(Paragraph(answer_display, code_style)) # Use code style for better block display
-                    elif isinstance(answer_raw, str):
-                        story.append(Paragraph(html.escape(answer_raw), normal_style))
-                    else: # If not a string (e.g. boolean, though current service returns string)
-                        story.append(Paragraph(html.escape(str(answer_raw)), normal_style))
-                    story.append(Spacer(1, 0.15*inch))
+                    # Get reasoning (the detailed explanation)
+                    reasoning_text = html.escape(item.get("reasoning", "N/A"))
+                    
+                    # Create table cells
+                    question_para = Paragraph(question, normal_style)
+                    answer_para = Paragraph(f'<font color="{answer_color.hexval()}">{answer_text}</font>', normal_style)
+                    reasoning_para = Paragraph(reasoning_text, normal_style)
+                    
+                    table_data.append([question_para, answer_para, reasoning_para])
+                
+                if len(table_data) > 1:  # Only create table if we have data beyond header
+                    # Create table with appropriate column widths
+                    col_widths = [2.5*inch, 0.8*inch, 4.2*inch]  # Adjust to fit letter page
+                    table = Table(table_data, colWidths=col_widths)
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+                        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                        ('BOTTOMPADDING', (0,0), (-1,0), 10),
+                        ('GRID', (0,0), (-1,-1), 1, colors.black),
+                        ('FONTSIZE', (0,0), (-1,-1), 9),  # Smaller font to fit more content
+                    ]))
+                    story.append(table)
+                else:
+                    story.append(Paragraph("No analysis data to display.", normal_style))
+                story.append(Spacer(1, 0.15*inch))
 
             elif service_key == "spell_check":
                 if not findings_list or (len(findings_list) == 1 and findings_list[0].get("type") == "error_extraction"):

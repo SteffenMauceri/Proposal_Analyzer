@@ -308,13 +308,13 @@ document.addEventListener('DOMContentLoaded', function () {
                             qCell.textContent = item.question;
                             row.appendChild(qCell);
                             const aCell = document.createElement('td');
-                            let answerStr = item.answer_text || "Unsure";
+                            let answerStr = "Unsure";
                             let answerClass = 'answer-unsure';
-                            if (item.answer === true || (item.answer_text && item.answer_text.toLowerCase() === 'yes')) {
-                                answerStr = item.answer_text || "YES";
+                            if (item.answer === true) {
+                                answerStr = "YES";
                                 answerClass = 'answer-yes';
-                            } else if (item.answer === false || (item.answer_text && item.answer_text.toLowerCase() === 'no')) {
-                                answerStr = item.answer_text || "NO";
+                            } else if (item.answer === false) {
+                                answerStr = "NO";
                                 answerClass = 'answer-no';
                             }
                             aCell.textContent = answerStr;
