@@ -83,13 +83,13 @@
                 <input type="hidden" id="questions-file-path" name="questions-file-path" value="">
 
                 <div class="form-group path-input-group compact-form-group">
-                    <label for="call_file_input" class="file-upload-label">Upload Call Doc</label>
-                    <input type="file" id="call_file_input" name="call_file_input" accept=".pdf,.doc,.docx" style="display: none;">
+                    <label for="call_file_input" class="file-upload-label">Upload Proposal Call [.pdf]</label>
+                    <input type="file" id="call_file_input" name="call_file_input" accept=".pdf" style="display: none;">
                     <span id="call_upload_status"></span>
                 </div>
 
                 <div class="form-group path-input-group compact-form-group">
-                    <label for="proposal_file_input" class="file-upload-label">Upload Proposal PDF</label>
+                    <label for="proposal_file_input" class="file-upload-label">Upload Proposal [.pdf]</label>
                     <input type="file" id="proposal_file_input" name="proposal_file_input" accept=".pdf" style="display: none;">
                     <span id="proposal_upload_status"></span>
                 </div>
@@ -107,9 +107,6 @@
                     <label for="analyze-proposal-opt" class="checkbox-label">
                         <input type="checkbox" id="analyze-proposal-opt" name="analyze-proposal-opt" checked> Question Answering
                     </label>
-                    <!-- <label for="spell-check-opt" class="checkbox-label">
-                        <input type="checkbox" id="spell-check-opt" name="spell-check-opt"> Spell & Grammar Check
-                    </label> -->
                     <label for="reviewer-feedback-opt" class="checkbox-label">
                         <input type="checkbox" id="reviewer-feedback-opt" name="reviewer-feedback-opt"> Expert Reviewer Feedback
                     </label>
@@ -122,7 +119,7 @@
             <section id="questions-editor-section" class="config-group">
                 <h2>3. Edit Questions (Optional)</h2>
                 <p class="info-text">Edit content below. These questions will be used if a Questions.txt file is not uploaded or if you wish to override its content for this run. Content from an uploaded file will appear here.</p>
-                <p class="info-text"><strong>Note:</strong> The default set contains 19 comprehensive questions (~3 minutes analysis time). You can edit or replace them with custom questions for faster analysis.</p>
+                <p class="info-text"><strong>Note:</strong> The default set of questions takes ~3 minutes analysis time. You can edit or replace them with custom questions for faster analysis.</p>
                 <textarea id="questions-content" rows="10">{{ questions_content }}</textarea>
             </section>
 
