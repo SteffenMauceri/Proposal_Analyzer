@@ -331,7 +331,7 @@ def main_cli(
             "reviewer_feedback": []
         }
         
-        effective_llm_instructions = llm_instructions if llm_instructions else questions_content
+        effective_llm_instructions = llm_instructions if llm_instructions else None
 
         # 1. Core Proposal Analysis (Optional)
         if analyze_proposal_opt:
