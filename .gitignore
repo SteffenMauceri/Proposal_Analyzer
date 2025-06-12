@@ -163,3 +163,4 @@ cython_debug/
 .idea/vcs.xml
 /data/main_uploads
 /exports
+main.py.backup

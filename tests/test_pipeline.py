@@ -16,7 +16,7 @@ from utils.file_helpers import read_questions_content
 # Using absolute paths as per your request
 CALL_PDF_PATH = Path("/Users/smauceri/Projects/GPT/proposal_scan/code/data/call/F.14+HPOSS.pdf")
 PROPOSAL_PDF_PATH = Path("/Users/smauceri/Projects/GPT/proposal_scan/code/data/proposal/Proposal_CCSDS_interfaces_as-code-20250428e.pdf")
-DEFAULT_QUESTIONS_FILE_PATH = Path("/Users/smauceri/Projects/GPT/proposal_scan/code/data/Questions_default.txt")
+DEFAULT_QUESTIONS_FILE_PATH = Path("/Users/smauceri/Projects/GPT/proposal_scan/code/data/Questions.txt")
 TEST_MODEL = "gpt-4.1-nano" # Using gpt-4.1-nano as requested (assuming "4o-nano" was a typo for this model family)
 OUTPUT_PDF_DIR = PROJECT_ROOT / "exports" / "test_outputs"
 OUTPUT_PDF_NAME = "test_pipeline_analysis_results.pdf"

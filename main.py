@@ -264,7 +264,7 @@ def main_cli(
     Default paths if arguments are not provided:
       Call PDF: First PDF/DOC/DOCX in data/call/
       Proposals Dir: data/proposal/
-      Questions File: data/Questions_default.txt
+      Questions File: data/Questions.txt
     """
     # --- Setup effective consoles based on output_format ---
     # If output_format is json, all non-data console output goes to stderr.
@@ -287,9 +287,9 @@ def main_cli(
         else: error_console.print("Error: No call PDF specified and none found in data/call/. Please specify with --call-pdf."); raise typer.Exit(code=1)
 
     if not questions_file:
-        questions_file = data_dir / "Questions_default.txt"
+        questions_file = data_dir / "Questions.txt"
         if questions_file.exists(): effective_info_console.print(f"No questions file specified, using default: {questions_file.name}")
-        else: error_console.print("Error: No questions file specified and default Questions_default.txt not found. Please specify with --questions-file."); raise typer.Exit(code=1)
+        else: error_console.print("Error: No questions file specified and default Questions.txt not found. Please specify with --questions-file."); raise typer.Exit(code=1)
     
     questions_content = read_questions_content(str(questions_file))
     if not questions_content and analyze_proposal_opt: # Only critical if proposal analysis is on
