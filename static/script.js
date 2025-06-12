@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Get Checkbox Elements ---
     const analyzeProposalOptCheckbox = document.getElementById('analyze-proposal-opt');
-    const spellCheckOptCheckbox = document.getElementById('spell-check-opt');
+
     const reviewerFeedbackOptCheckbox = document.getElementById('reviewer-feedback-opt');
     // const nasaPmFeedbackOptCheckbox = document.getElementById('nasa-pm-feedback-opt');
 
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Get checkbox states
             const analyzeProposalOpt = analyzeProposalOptCheckbox ? analyzeProposalOptCheckbox.checked : false;
-            const spellCheckOpt = spellCheckOptCheckbox ? spellCheckOptCheckbox.checked : false;
+    
             const reviewerFeedbackOpt = reviewerFeedbackOptCheckbox ? reviewerFeedbackOptCheckbox.checked : false;
             // const nasaPmFeedbackOpt = nasaPmFeedbackOptCheckbox ? nasaPmFeedbackOptCheckbox.checked : false;
 
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('Questions File Path (initial):', questionsFilePath);
             console.log('Questions Content to Save:', questionsContentToSave);
             console.log('Analyze Proposal Option:', analyzeProposalOpt);
-            console.log('Spell Check Option:', spellCheckOpt);
+
             console.log('Reviewer Feedback Option:', reviewerFeedbackOpt);
             // console.log('NASA PM Feedback Option:', nasaPmFeedbackOpt);
 
@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         questions_file_path: questionsFilePath, 
                         // Add checkbox states to the request
                         analyze_proposal_opt: analyzeProposalOpt,
-                        spell_check_opt: spellCheckOpt,
+            
                         reviewer_feedback_opt: reviewerFeedbackOpt
                         // nasa_pm_feedback_opt: nasaPmFeedbackOpt // Removed
                     }),
@@ -330,34 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         resultsRendered = true;
                     } 
 
-                    // Display Spell Check Results
-                    if (proposalResult.spell_check && Array.isArray(proposalResult.spell_check) && proposalResult.spell_check.length > 0) {
-                        const spellCheckTitle = document.createElement('h4');
-                        spellCheckTitle.textContent = 'Spell & Grammar Check';
-                        proposalContainer.appendChild(spellCheckTitle);
-                        
-                        const spellCheckList = document.createElement('ul');
-                        spellCheckList.classList.add('results-list');
-                        proposalResult.spell_check.forEach(issue => {
-                            const listItem = document.createElement('li');
-                            let itemText = ``;
-                            if (issue.line_number && issue.line_number !== -1) {
-                                itemText += `Line ${issue.line_number} ('${issue.line_with_error || 'N/A'}'): `;
-                            }
-                            itemText += `'${issue.original_snippet}' → '${issue.suggestion}' (Type: ${issue.type}).`;
-                            if (issue.explanation && issue.explanation !== "N/A") {
-                                itemText += ` Why: ${issue.explanation}`;
-                            }
-                            listItem.textContent = itemText;
-                            // Add styling for errors vs suggestions if desired
-                            if (issue.type && issue.type.includes('error')) {
-                                listItem.style.color = 'red';
-                            }
-                            spellCheckList.appendChild(listItem);
-                        });
-                        proposalContainer.appendChild(spellCheckList);
-                        resultsRendered = true;
-                    }
+
 
                     // Display Reviewer Feedback Results
                     if (proposalResult.reviewer_feedback && Array.isArray(proposalResult.reviewer_feedback) && proposalResult.reviewer_feedback.length > 0) {

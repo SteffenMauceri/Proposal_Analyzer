@@ -9,7 +9,7 @@ from .config import get_api_key
 
 def query(
     messages: List[Dict[str, str]], 
-    model: str = "gpt-4.1-mini-2025-04-14", 
+    model: str = "gpt-4.1-mini", 
     client: Optional[openai.OpenAI] = None
 ) -> str:
     """Sends a query to the OpenAI API and returns the response.

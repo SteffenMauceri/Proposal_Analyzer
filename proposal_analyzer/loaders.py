@@ -1,26 +1,26 @@
-import PyPDF2
-from docx import Document
+import sys
+import os
+
+# Add parent directory to path for relative imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.text_extraction import extract_text_from_document
 
 def load_pdf(path: str) -> str:
-    """Loads text content from a PDF file.
+    """Loads text content from a PDF file using the enhanced text extraction utility.
 
     Args:
         path: The path to the PDF file.
 
     Returns:
-        A string containing the text content of the PDF, with pages joined by newline characters.
+        A string containing the text content of the PDF.
     """
-    text_content = []
-    with open(path, "rb") as f:
-        reader = PyPDF2.PdfReader(f)
-        for page_num in range(len(reader.pages)):
-            page = reader.pages[page_num]
-            text_content.append(page.extract_text())
-    return "\n".join(text_content)
+    text = extract_text_from_document(path)
+    return text if text else ""
 
 
 def load_docx(path: str) -> str:
-    """Loads text content from a DOCX file.
+    """Loads text content from a DOCX file using the enhanced text extraction utility.
 
     Args:
         path: The path to the DOCX file.
@@ -28,8 +28,8 @@ def load_docx(path: str) -> str:
     Returns:
         A string containing the text content of the DOCX.
     """
-    doc = Document(path)
-    return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    text = extract_text_from_document(path)
+    return text if text else ""
 
 
 def load_txt(path: str) -> list[str]:

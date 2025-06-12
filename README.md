@@ -6,7 +6,7 @@ This is a web-based tool to analyze PDF proposal documents. You can upload a pro
 
 *   **PDF Proposal Upload**: Upload a proposal document in PDF format.
 *   **Question Answering**: Ask questions about the content of the proposal.
-*   **Spell Checker**: Performs spelling and grammar checking on the proposal text. It is optimized to handle text extracted from PDFs, which may contain artifacts like hyphenation errors.
+
 *   **Expert Reviewer Feedback**: Generates feedback on the proposal from the perspective of an expert reviewer, highlighting strengths and weaknesses.
 *   **Export to PDF**: The analysis results can be downloaded as a PDF report.
 

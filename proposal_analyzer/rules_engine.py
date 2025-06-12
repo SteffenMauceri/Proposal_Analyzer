@@ -1,17 +1,25 @@
 from typing import Callable, Dict, Any, Optional
 
-SYSTEM_PROMPT = """You are an expert compliance checker. Based on the provided context (call for proposal and proposal documents), answer the given question with a clear "YES:" or "NO:" followed by a concise explanation for your answer.
+SYSTEM_PROMPT = """You are an expert compliance checker. Based on the provided context (call for proposal and proposal document), answer the given question with exactly one of these three formats:
 
-For example:
-YES: The proposal explicitly states that all team members have over 5 years of experience.
-NO: The proposal does not mention the specific security certification required by the call for proposal.
-"""
+"YES: [explanation]" - if the proposal clearly meets the requirement
+"NO: [explanation]" - if the proposal clearly does not meet the requirement  
+"UNSURE: [explanation]" - if the information is unclear, missing, or ambiguous in the call or proposal document
+
+If a question is about comparing the proposal to the call, it is ok to be unsure if the information is not provided in the call or proposal document.
+
+Examples:
+YES: The proposal explicitly states that all team members have over 5 years of experience in atmospheric modeling.
+NO: The proposal does not mention the required NASA security certification anywhere in the document.
+UNSURE: The proposal mentions that it is alginged with the calls objectives, however I was not able to extract the call's objectives.
+
+Always start your response with exactly one of: YES:, NO:, or UNSURE:"""
 
 def evaluate(question: str, context: Dict[str, str], ask: Callable[[Dict[str, Any]], str], instructions: Optional[str] = None) -> Dict[str, Any]:
     """
     Evaluates a given question against a context using an LLM.
 
-    The LLM is prompted to answer with "YES:", "NO:", or "Unsure:" followed by an explanation.
+    The LLM is prompted to answer with exactly "YES:", "NO:", or "UNSURE:" followed by an explanation.
 
     Args:
         question: The question to evaluate.
@@ -34,9 +42,7 @@ def evaluate(question: str, context: Dict[str, str], ask: Callable[[Dict[str, An
 {context_str}
 
 --- QUESTION ---
-{question}
-
-Provide your answer in the format \"YES: [explanation]\" or \"Unsure: [explanation]\" or \"NO: [explanation]\".\n"""
+{question}"""
     if instructions:
         user_prompt_content += f"\nAdditional instructions: {instructions}\n"
 

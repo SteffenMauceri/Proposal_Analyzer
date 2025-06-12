@@ -127,7 +127,7 @@ class PDFExportService:
     ) -> Optional[str]:
         """
         Generates a comprehensive PDF report from all collected findings.
-        Includes sections for each service run (core analysis, spell check, placeholders).
+        Includes sections for each service run (core analysis, reviewer feedback).
         """
         doc = SimpleDocTemplate(
             str(self.export_path), 
@@ -257,34 +257,7 @@ class PDFExportService:
                     story.append(Paragraph("No analysis data to display.", normal_style))
                 story.append(Spacer(1, 0.15*inch))
 
-            elif service_key == "spell_check":
-                if not findings_list or (len(findings_list) == 1 and findings_list[0].get("type") == "error_extraction"):
-                    story.append(Paragraph(findings_list[0].get("explanation", "Could not process document for spell check."), error_style if findings_list else normal_style))
-                else:
-                    for issue in findings_list:
-                        original_snippet = html.escape(issue.get('original_snippet', 'N/A'))
-                        suggestion = html.escape(issue.get('suggestion', 'N/A'))
-                        issue_type = html.escape(issue.get('type', 'N/A'))
-                        explanation = html.escape(issue.get('explanation', 'No explanation provided.'))
-                        line_num = issue.get('line_number', -1)
-                        line_content = html.escape(issue.get('line_with_error', ''))
-                        char_offset = issue.get('char_offset_start_in_doc', 'N/A')
 
-                        location_info = ""
-                        if line_num != -1 and line_num is not None:
-                            location_info = f"<b>Line {line_num}</b> (approx. offset {char_offset})"
-                            if line_content:
-                                story.append(Paragraph(f"<i>Context: {line_content}</i>", self.styles['Italic']))
-                        else: # PDF or no line number
-                            location_info = f"<b>Offset {char_offset}</b> (exact)"
-                        
-                        story.append(Paragraph(location_info, normal_style))
-                        story.append(Paragraph(f"<b>Found:</b> <font color='red'>{original_snippet}</font> (<i>Type: {issue_type}</i>)", normal_style))
-                        story.append(Paragraph(f"<b>Suggestion:</b> <font color='green'>{suggestion}</font>", normal_style))
-                        if explanation and explanation != "N/A" and explanation != "No explanation provided.":
-                             story.append(Paragraph(f"<b>Explanation:</b> {explanation}", suggestion_style))
-                        story.append(Spacer(1, 0.1*inch))
-                story.append(Spacer(1, 0.15*inch))
             
             elif service_key == "reviewer_feedback":
                  for item in findings_list:

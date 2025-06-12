@@ -61,7 +61,7 @@ CHAT_UPLOADED_FILES_SESSION_KEY = 'chat_uploaded_classified_files'
 CHAT_UNCLASSIFIED_FILES_SESSION_KEY = 'chat_unclassified_files'
 
 # Initialize services
-analysis_service = AnalysisService(project_root=PROJECT_ROOT)
+analysis_service = AnalysisService(project_root=PROJECT_ROOT, model_name='gpt-4.1-mini')
 
 # --- Helper Functions (Simplified) ---
 # Moved to utils.file_helpers
@@ -172,7 +172,6 @@ def run_analysis():
 
     # Get checkbox states from the request
     analyze_proposal_opt = data.get('analyze_proposal_opt', False)
-    spell_check_opt = data.get('spell_check_opt', False)
     reviewer_feedback_opt = data.get('reviewer_feedback_opt', False)
 
     if not call_pdf_path_str or not proposal_file_path_str:
@@ -204,12 +203,10 @@ def run_analysis():
                 call_pdf_path=call_pdf_path,
                 proposals_dir_path=proposals_dir_path, # Still needed by service
                 questions_file_path=questions_file_path,
-                model=model,
                 selected_proposal_filenames=selected_proposal_filenames, # List with one item
                 logger=app.logger,
                 # Pass the new options
                 analyze_proposal_opt=analyze_proposal_opt,
-                spell_check_opt=spell_check_opt,
                 reviewer_feedback_opt=reviewer_feedback_opt
             )
             for event_string in stream_iterator:
@@ -236,7 +233,7 @@ def export_pdf():
             return jsonify(success=False, message="No valid analysis data provided for PDF export."), 400
 
         # Use the comprehensive analysis data directly - it should contain keys like:
-        # proposal_analysis, spell_check, reviewer_feedback, etc.
+        # proposal_analysis, reviewer_feedback, etc.
         all_findings = analysis_data_from_client
 
         base_name = Path(proposal_filename_original).stem
@@ -253,15 +250,13 @@ def export_pdf():
         # Determine which services were run based on the presence of data
         services_run = {
             "Core Analysis": bool(all_findings.get("proposal_analysis")),
-            "Spell Check": bool(all_findings.get("spell_check")),
             "Reviewer Feedback": bool(all_findings.get("reviewer_feedback"))
         }
         
-        # Basic model information (we don't have detailed model info from the client)
+        # Basic model information from the services
         models_used = {
-            "Analysis Model": "gpt-4.1-mini" if services_run["Core Analysis"] else "N/A",
-            "Spell Check Model": "gpt-4.1-nano" if services_run["Spell Check"] else "N/A",
-            "Reviewer Feedback Model": "gpt-4.1-mini" if services_run["Reviewer Feedback"] else "N/A"
+            "Analysis Model": analysis_service.model_name if services_run["Core Analysis"] else "N/A",
+            "Reviewer Feedback Model": "o3" if services_run["Reviewer Feedback"] else "N/A"  # ReviewerFeedbackService default
         }
 
         generated_pdf_path = pdf_exporter.generate_full_report_pdf(
@@ -614,8 +609,6 @@ def stream_analysis_results():
         
         questions_file_path_str = classified_files.get('questions')
         questions_file_path = Path(questions_file_path_str) if questions_file_path_str else None
-        
-        model_for_analysis = 'gpt-4.1-mini'
 
     except Exception as e_setup:
         app.logger.error(f"Error during setup in /stream_analysis_results: {e_setup}", exc_info=True)
@@ -627,12 +620,11 @@ def stream_analysis_results():
     # This inner function is what gets streamed
     def generate_stream_wrapper():
         try:
-            app.logger.info(f"generate_stream_wrapper: Starting analysis with call_pdf={call_pdf_path}, proposals_dir={proposals_dir_path}, questions={questions_file_path}, model={model_for_analysis}, selected={selected_proposal_filenames}")
+            app.logger.info(f"generate_stream_wrapper: Starting analysis with call_pdf={call_pdf_path}, proposals_dir={proposals_dir_path}, questions={questions_file_path}, model={analysis_service.model_name}, selected={selected_proposal_filenames}")
             stream_iterator = analysis_service.run_analysis_stream(
                 call_pdf_path=call_pdf_path,
                 proposals_dir_path=proposals_dir_path, 
                 questions_file_path=questions_file_path,
-                model=model_for_analysis, 
                 selected_proposal_filenames=selected_proposal_filenames,
                 logger=app.logger
             )

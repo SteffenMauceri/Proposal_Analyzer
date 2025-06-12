@@ -4,32 +4,29 @@ import json
 from typing import List, Dict, Any, Optional, Callable, Iterator, Tuple
 import html
 
-# Import for direct analysis
-from proposal_analyzer.analyzer import analyze as perform_proposal_analysis
+
 
 # Assuming main.py CLI is the primary way to trigger the core analysis for now.
 # We will adapt this if direct Python calls to analyzer.analyze become preferred
 # over subprocess for the web app.
 
 class AnalysisService:
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, model_name: str = "gpt-4.1-mini"):
         self.project_root = project_root
+        self.model_name = model_name
 
     def _build_analysis_command(
         self,
         call_pdf_path: Path,
         proposals_dir_path: Path, # This might become optional or change if only --proposal-pdf is used
         questions_file_path: Optional[Path],
-        model: str,
         selected_proposal_filenames: Optional[List[str]] = None,
         analyze_proposal_opt: bool = True,
-        spell_check_opt: bool = False,
         reviewer_feedback_opt: bool = False
     ) -> List[str]:
         base_command = [
             'python', str(self.project_root / 'main.py'),
             '--call-pdf', str(call_pdf_path.resolve()),
-            '--model', model,
             '--output-format', 'json'  # Essential for service to parse results
         ]
 
@@ -63,9 +60,7 @@ class AnalysisService:
         if not analyze_proposal_opt: # Typer uses --no-analyze-proposal to disable
             base_command.append('--no-analyze-proposal')
         
-        if spell_check_opt:
-            base_command.append('--spell-check')
-        # else: base_command.append('--no-spell-check') # No need, it's default off in main.py
+
 
         if reviewer_feedback_opt:
             base_command.append('--reviewer-feedback')
@@ -83,11 +78,9 @@ class AnalysisService:
         call_pdf_path: Path,
         proposals_dir_path: Path,
         questions_file_path: Optional[Path],
-        model: str,
         selected_proposal_filenames: Optional[List[str]] = None,
         logger: Optional[Any] = None, # Pass Flask app.logger or any logger
         analyze_proposal_opt: bool = True,
-        spell_check_opt: bool = False,
         reviewer_feedback_opt: bool = False
     ) -> Iterator[str]:
         """
@@ -98,10 +91,8 @@ class AnalysisService:
             call_pdf_path,
             proposals_dir_path,
             questions_file_path,
-            model,
             selected_proposal_filenames,
             analyze_proposal_opt,
-            spell_check_opt,
             reviewer_feedback_opt
         )
 
@@ -192,12 +183,10 @@ class AnalysisService:
         call_pdf_path: Path,
         proposals_dir_path: Path,
         questions_file_path: Path,
-        model: str,
         selected_proposal_filenames: Optional[List[str]] = None,
         logger: Optional[Any] = None,
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         analyze_proposal_opt: bool = True,
-        spell_check_opt: bool = False,
         reviewer_feedback_opt: bool = False
     ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         """
@@ -209,10 +198,8 @@ class AnalysisService:
             call_pdf_path,
             proposals_dir_path,
             questions_file_path,
-            model,
             selected_proposal_filenames,
             analyze_proposal_opt,
-            spell_check_opt,
             reviewer_feedback_opt
         )
 
@@ -276,39 +263,54 @@ class AnalysisService:
                 # It's not an error per se, but no data was returned.
                 return [], warn_msg # Return empty list and the warning 
 
-    def analyze_proposal_directly(
+    def analyze_proposal_with_text(
         self,
-        call_pdf_path_str: str,
-        proposal_pdf_path_str: str,
-        questions_file_path_str: str,
-        model_name: str,
-        llm_instructions: str,
+        call_text: str,
+        proposal_text: str,
+        questions_content: str,
+        llm_instructions: Optional[str] = None,
         logger: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
         """
-        Performs analysis for a single proposal by directly calling the analyzer.
-        This method does not use a subprocess.
+        Performs analysis for a single proposal using pre-extracted text.
+        This method directly uses the analyzer with extracted text, avoiding file I/O.
+        Uses the model specified during service initialization.
         """
         if logger:
-            logger.info(f"AnalysisService (direct): Analyzing proposal {proposal_pdf_path_str} with model {model_name}")
+            logger.info(f"AnalysisService (text-based): Analyzing proposal with model {self.model_name}")
 
         try:
-            # Ensure paths are strings for the analyzer
-            results: List[Dict[str, Any]] = perform_proposal_analysis(
-                call_p=str(call_pdf_path_str),
-                prop_p=str(proposal_pdf_path_str),
-                q_p=str(questions_file_path_str),
-                model=model_name,
-                instructions=llm_instructions
-                # No progress_callback here as this path is for direct, non-JSON output
-                # and typically used where main.py handles its own Rich UI.
-            )
+            # Import here to avoid circular imports
+            from proposal_analyzer.rules_engine import evaluate
+            from proposal_analyzer.llm_client import query as ask_llm
+            from functools import partial
+            
+            # Parse questions content into a list
+            questions = [line.strip() for line in questions_content.split('\n') if line.strip()]
+            
+            # Create context dictionary like the analyzer does
+            context = {
+                "call": call_text,
+                "proposal": proposal_text
+            }
+            
+            results: List[Dict[str, Any]] = []
+            llm_call_for_evaluate = partial(ask_llm, model=self.model_name, client=None)
+            
+            # Process each question
+            for q_text in questions:
+                if logger:
+                    logger.debug(f"AnalysisService (text-based): Processing question: {q_text[:50]}...")
+                result = evaluate(question=q_text, context=context, ask=llm_call_for_evaluate, instructions=llm_instructions)
+                results.append(result)
+            
             if logger:
-                logger.info(f"AnalysisService (direct): Successfully analyzed {proposal_pdf_path_str}")
+                logger.info(f"AnalysisService (text-based): Successfully analyzed {len(questions)} questions")
             return results
         except Exception as e:
             if logger:
-                logger.error(f"AnalysisService (direct): Error during analysis of {proposal_pdf_path_str}: {e}", exc_info=True)
-            # Re-raise the exception so the caller (main.py) can handle it,
-            # potentially displaying it in the Rich console.
-            raise 
+                logger.error(f"AnalysisService (text-based): Error during analysis: {e}", exc_info=True)
+            # Re-raise the exception so the caller (main.py) can handle it
+            raise
+
+ 
