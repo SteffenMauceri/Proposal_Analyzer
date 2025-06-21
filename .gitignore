@@ -164,3 +164,4 @@ cython_debug/
 /data/main_uploads
 /exports
 main.py.backup
+data/call/.DS_Store
