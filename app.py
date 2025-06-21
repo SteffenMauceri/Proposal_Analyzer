@@ -197,15 +197,15 @@ def run_analysis():
     analyze_proposal_opt = data.get('analyze_proposal_opt', False)
     reviewer_feedback_opt = data.get('reviewer_feedback_opt', False)
 
-    if not call_pdf_path_str or not proposal_file_path_str:
-        return jsonify(success=False, message="Call PDF and Proposal PDF paths are required."), 400
+    if not proposal_file_path_str:
+        return jsonify(success=False, message="Proposal PDF path is required."), 400
         
-    call_pdf_path = Path(call_pdf_path_str)
+    call_pdf_path = Path(call_pdf_path_str) if call_pdf_path_str else None  # Call is now optional
     proposal_file_path = Path(proposal_file_path_str)
     questions_file_path = Path(questions_file_path_str) if questions_file_path_str else None # Questions are optional
 
     path_errors = []
-    if not call_pdf_path.is_file():
+    if call_pdf_path and not call_pdf_path.is_file():  # Only validate if path is provided
         path_errors.append(f"Call PDF not found: {call_pdf_path_str}")
     if not proposal_file_path.is_file():
         path_errors.append(f"Proposal PDF not found: {proposal_file_path_str}")

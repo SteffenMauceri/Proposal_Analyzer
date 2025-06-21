@@ -69,12 +69,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // --- Validate required uploads ---
             let isValid = true;
-            if (!callPdfPath) {
-                alert('Call Document must be uploaded.');
-                const statusEl = document.getElementById('call_upload_status');
-                if(statusEl) { statusEl.textContent = 'Call Document is required.'; statusEl.style.color = 'red'; }
-                isValid = false;
-            }
+            // Call document is now optional, so we don't validate it
             if (!proposalFilePath) {
                 alert('Proposal PDF must be uploaded.');
                 const statusEl = document.getElementById('proposal_upload_status');

@@ -17,7 +17,7 @@ class AnalysisService:
 
     def _build_analysis_command(
         self,
-        call_pdf_path: Path,
+        call_pdf_path: Optional[Path],  # Now optional
         proposals_dir_path: Path, # This might become optional or change if only --proposal-pdf is used
         questions_file_path: Optional[Path],
         selected_proposal_filenames: Optional[List[str]] = None,
@@ -26,9 +26,12 @@ class AnalysisService:
     ) -> List[str]:
         base_command = [
             'python', str(self.project_root / 'main.py'),
-            '--call-pdf', str(call_pdf_path.resolve()),
             '--output-format', 'json'  # Essential for service to parse results
         ]
+        
+        # Only add call-pdf if provided
+        if call_pdf_path:
+            base_command.extend(['--call-pdf', str(call_pdf_path.resolve())])
 
         # Prioritize --proposal-pdf if a single proposal is selected, as per main.py hint
         if selected_proposal_filenames and len(selected_proposal_filenames) == 1:
@@ -86,7 +89,7 @@ class AnalysisService:
 
     def run_analysis_stream(
         self,
-        call_pdf_path: Path,
+        call_pdf_path: Optional[Path],  # Now optional
         proposals_dir_path: Path,
         questions_file_path: Optional[Path],
         selected_proposal_filenames: Optional[List[str]] = None,
@@ -191,7 +194,7 @@ class AnalysisService:
 
     def run_analysis_blocking(
         self,
-        call_pdf_path: Path,
+        call_pdf_path: Optional[Path],  # Now optional
         proposals_dir_path: Path,
         questions_file_path: Path,
         selected_proposal_filenames: Optional[List[str]] = None,

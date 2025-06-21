@@ -158,8 +158,11 @@ def main_cli(
     data_dir = PROJECT_ROOT / "data"
     if not call_pdf:
         call_pdf = find_first_document(data_dir / "call", ["*.pdf", "*.doc", "*.docx"])
-        if call_pdf: effective_info_console.print(f"No call PDF specified, using found: {call_pdf.name}")
-        else: error_console.print("Error: No call PDF specified and none found in data/call/. Please specify with --call-pdf."); raise typer.Exit(code=1)
+        if call_pdf: 
+            effective_info_console.print(f"No call PDF specified, using found: {call_pdf.name}")
+        else: 
+            effective_info_console.print("No call document specified or found. Analysis will proceed without call document context.")
+            call_pdf = None  # Set to None to indicate no call document
 
     if not questions_file:
         questions_file = data_dir / "Questions.txt"
@@ -227,10 +230,14 @@ def main_cli(
         if not proposal_text_content:
             effective_info_console.print(f"Warning: Could not extract text from {proposal_pdf_path.name}. Some services may be skipped or report errors.")
         
-        effective_info_console.print(f"Extracting text from call document {call_pdf.name}...")
-        call_text_content: Optional[str] = extract_text_from_document(call_pdf)
-        if not call_text_content:
-            effective_info_console.print(f"Warning: Could not extract text from call document {call_pdf.name}. Some services may be affected.")
+        if call_pdf:
+            effective_info_console.print(f"Extracting text from call document {call_pdf.name}...")
+            call_text_content: Optional[str] = extract_text_from_document(call_pdf)
+            if not call_text_content:
+                effective_info_console.print(f"Warning: Could not extract text from call document {call_pdf.name}. Some services may be affected.")
+        else:
+            effective_info_console.print("No call document provided. Using placeholder text.")
+            call_text_content = "Proposal Call Document Not Provided"
         
         effective_info_console.print(f"Reading questions from {questions_file.name}...")
         questions_content = read_questions_content(str(questions_file))
@@ -241,7 +248,7 @@ def main_cli(
         if analyze_proposal_opt:
             effective_info_console.print(f"Running core proposal analysis using model: {analysis_service.model_name}...")
             if proposal_text_content and call_text_content and questions_content:
-                # Use pre-extracted text for analysis
+                # Use pre-extracted text for analysis (call_text_content could be dummy text)
                 try:
                     analysis_findings = analysis_service.analyze_proposal_with_text(
                         call_text=call_text_content,
@@ -266,7 +273,9 @@ def main_cli(
                 if not proposal_text_content:
                     missing_docs.append(f"proposal ({proposal_pdf_path.name})")
                 if not call_text_content:
-                    missing_docs.append(f"call document ({call_pdf.name})")
+                    if call_pdf:
+                        missing_docs.append(f"call document ({call_pdf.name})")
+                    # Note: if call_pdf is None, call_text_content should be the dummy text, so this shouldn't happen
                 if not questions_content:
                     missing_docs.append(f"questions file ({questions_file.name})")
                 
@@ -322,7 +331,7 @@ def main_cli(
                 proposal_filename=proposal_pdf_path.name,
                 all_findings=all_results_for_proposal,
                 # We might also want to pass the call_pdf name, questions used, models used, etc. for the PDF header
-                call_document_name=call_pdf.name,
+                call_document_name=call_pdf.name if call_pdf else "No call document provided",
                 questions_source_name=questions_file.name,
                 # Include which services were run
                 services_run={

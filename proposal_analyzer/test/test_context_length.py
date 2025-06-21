@@ -171,7 +171,7 @@ Please analyze and respond in the specified format."""
                 "found_end": found_end,
                 "found_min": found_min,
                 "found_max": found_max,
-                "response": response[:200] + "..." if len(response) > 200 else response
+                "response": response
             }
                 
         except Exception as e:
@@ -200,7 +200,7 @@ Please analyze and respond in the specified format."""
             model_name = 'gpt-4o'
         
         # Test common context lengths with improved method
-        test_lengths = [4000, 8000, 16000, 32000, 64000, 128000]
+        test_lengths = [4000, 8000, 16000, 30000, 64000, 128000]
         last_successful = 0
         
         print(f"🔍 Testing LLM Context Length (Improved Method)")
@@ -382,6 +382,153 @@ What is the HIGHEST number in this sequence? Respond with only that number."""
             print(f"❌ Connection failed: {e}")
             return False
 
+    def test_context_loss_detection(self, target_tokens=32000, marker_interval=2000):
+        """
+        Test to detect exactly where context loss begins by placing distinctive markers
+        at regular intervals and checking which ones the model can see.
+        
+        Args:
+            target_tokens: Total tokens to test  
+            marker_interval: Place a marker every N tokens
+        """
+        provider = get_llm_provider()
+        if provider == 'local':
+            config = get_local_llm_config()
+            model_name = config['model_name']
+        else:
+            model_name = 'gpt-4o'
+        
+        print(f"🔍 Context Loss Detection Test")
+        print(f"🤖 Model: {model_name} (provider: {provider})")
+        print(f"🎯 Target tokens: {target_tokens:,}")
+        print(f"📍 Marker every: {marker_interval:,} tokens")
+        print()
+        
+        # Generate content with markers at regular intervals
+        markers = []
+        content_parts = []
+        current_tokens = 0
+        marker_count = 0
+        
+        while current_tokens < target_tokens:
+            # Add a distinctive marker
+            marker_count += 1
+            marker_name = f"CHECKPOINT_{marker_count:03d}_TOKEN_{current_tokens:06d}"
+            markers.append(marker_name)
+            content_parts.append(f"{marker_name}, ")
+            
+            # Fill with numbers until next marker position
+            target_next_marker = current_tokens + marker_interval
+            while current_tokens < target_next_marker and current_tokens < target_tokens:
+                # Add some numbers
+                for i in range(10):  # Add 10 numbers at a time
+                    if current_tokens >= target_tokens:
+                        break
+                    content_parts.append(f"{current_tokens + i}, ")
+                
+                # Estimate current token count
+                test_content = "".join(content_parts)
+                current_tokens = self._estimate_tokens(test_content, model_name)
+        
+        # Finalize content
+        full_content = "".join(content_parts)
+        actual_tokens = self._estimate_tokens(full_content, model_name)
+        
+        print(f"📊 Generated {len(markers)} markers in {actual_tokens:,} tokens")
+        print(f"🏷️  Markers: {markers[0]} ... {markers[-1]}")
+        print()
+        
+        # Ask model which markers it can see
+        system_prompt = """You are a marker detector. I will give you content with checkpoint markers.
+Your job is to identify which checkpoint markers you can see.
+
+Each marker has the format: CHECKPOINT_XXX_TOKEN_YYYYYY
+
+Respond with a simple list of marker numbers you can see, like:
+FOUND: 001, 003, 005, 012
+"""
+        
+        user_prompt = f"""Here is the content with markers:
+{full_content}
+
+Please list all the checkpoint markers you can see in the format requested."""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        # Call LLM and measure time
+        start_time = time.perf_counter()
+        response = query(messages=messages, model=model_name, provider=provider)
+        end_time = time.perf_counter()
+        wall_clock_time = end_time - start_time
+        
+        print(f"⏱️  Wall clock time: {wall_clock_time:.2f} seconds")
+        print(f"🚀 Tokens/second: {actual_tokens / wall_clock_time:,.0f}")
+        print()
+        
+        # Parse response to see which markers were found
+        found_markers = []
+        response_upper = response.upper()
+        
+        for i, marker in enumerate(markers, 1):
+            marker_num = f"{i:03d}"
+            if f"CHECKPOINT_{marker_num}" in response_upper or marker_num in response_upper:
+                found_markers.append(i)
+        
+        # Analyze results
+        total_markers = len(markers)
+        found_count = len(found_markers)
+        
+        print(f"📊 Results:")
+        print(f"   Total markers placed: {total_markers}")
+        print(f"   Markers found: {found_count}")
+        print(f"   Success rate: {found_count/total_markers*100:.1f}%")
+        print()
+        
+        if found_markers:
+            print(f"🔍 Found markers: {found_markers}")
+            print(f"   First found: #{found_markers[0]} (≈{found_markers[0]*marker_interval:,} tokens)")
+            print(f"   Last found: #{found_markers[-1]} (≈{found_markers[-1]*marker_interval:,} tokens)")
+            
+            # Check for gaps to identify truncation pattern
+            missing_markers = [i for i in range(1, total_markers + 1) if i not in found_markers]
+            if missing_markers:
+                print(f"❌ Missing markers: {missing_markers}")
+                
+                # Analyze truncation pattern
+                if found_markers[0] > 1:
+                    print(f"   🔸 Beginning truncated: Missing markers 1-{found_markers[0]-1}")
+                if found_markers[-1] < total_markers:
+                    print(f"   🔸 End truncated: Missing markers {found_markers[-1]+1}-{total_markers}")
+                
+                # Check for middle gaps
+                gaps = []
+                for i in range(len(found_markers)-1):
+                    if found_markers[i+1] - found_markers[i] > 1:
+                        gaps.append((found_markers[i]+1, found_markers[i+1]-1))
+                
+                if gaps:
+                    print(f"   🔸 Middle gaps: {gaps}")
+        else:
+            print(f"❌ No markers found - complete context failure!")
+        
+        print()
+        print(f"📝 Raw response sample:")
+        print(f"   {response[:200]}{'...' if len(response) > 200 else ''}")
+        
+        return {
+            "total_markers": total_markers,
+            "found_markers": found_markers,
+            "found_count": found_count,
+            "success_rate": found_count/total_markers,
+            "wall_clock_time": wall_clock_time,
+            "tokens_per_second": actual_tokens / wall_clock_time,
+            "actual_tokens": actual_tokens,
+            "response": response
+        }
+
 
 def manual_context_test(max_tokens=32000, step_size=4000):
     """
@@ -474,6 +621,11 @@ if __name__ == "__main__":
         elif sys.argv[1] == "test":
             tester = TestContextLength()
             tester.test_basic_connectivity()
+        elif sys.argv[1] == "detect":
+            tester = TestContextLength()
+            target = int(sys.argv[2]) if len(sys.argv) > 2 else 30000
+            interval = int(sys.argv[3]) if len(sys.argv) > 3 else 2000
+            tester.test_context_loss_detection(target, interval)
         elif sys.argv[1] == "custom":
             try:
                 max_tokens = int(sys.argv[2]) if len(sys.argv) > 2 else 16000
@@ -483,12 +635,13 @@ if __name__ == "__main__":
                 print("Usage: python test_context_length.py custom <max_tokens> <step_size>")
                 sys.exit(1)
         else:
-            print("Usage: python test_context_length.py [quick|full|test|custom <max_tokens> <step_size>]")
+            print("Usage: python test_context_length.py [quick|full|test|detect|custom <max_tokens> <step_size>]")
     else:
         print("Available commands:")
         print("  python test_context_length.py test       # Test basic connectivity")
         print("  python test_context_length.py quick      # Test common lengths with timing")
         print("  python test_context_length.py full       # Test up to 32k tokens with timing")
+        print("  python test_context_length.py detect 30000 2000  # Context loss detection test")
         print("  python test_context_length.py custom 16000 1000  # Custom test with timing")
         print()
         print("Or run as pytest:")
