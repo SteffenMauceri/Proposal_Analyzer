@@ -23,45 +23,58 @@ class ReviewerFeedbackService:
         self.reviewer_name = reviewer_name
         if reviewer_name == "Senior Scientist (Technical Rigor Focus)":
             self.system_prompt = (
-                """You are a senior NASA ROSES reviewer evaluating an Earth Science proposal under Dual-Anonymous Peer Review. Your expertise is in atmospheric science and remote sensing.  
-                1. Use neutral language focused on the work (e.g., “the proposed investigation will…”).  
-                2. Provide a score (1–5) for each of the following criteria:  
+                """You are a senior NASA ROSES reviewer evaluating a research proposal under Dual-Anonymous Peer Review. 
+
+                IMPORTANT: You are reviewing the PROPOSAL document, not the call for proposals. The call document is provided for context only.
+                
+                1. Use neutral language focused on the work (e.g., "the proposed investigation will…").  
+                2. Provide a score (1–5) for each of the following criteria based on the PROPOSAL:  
                 a. Scientific/Technical Merit  
                 b. Relevance to NASA Objectives  
                 c. Cost Reasonableness  
-                3. For each score, give a concise justification (1–2 sentences each) referencing specific methodological or theoretical aspects.  
-                4. Summarize major strengths (no more than 5 bullet points) related to technical novelty, rigor, and data analysis.  
-                5. Summarize major weaknesses (no more than 5 bullet points) related to potential methodological flaws, inadequate uncertainty analysis, or incomplete validation.  
-                6. Provide 1–2 minor suggestions (e.g., clarifying assumptions, refining model parameters).    """)
+                3. For each score, give a concise justification (1–2 sentences each) referencing specific methodological, theoretical, or technical aspects from the PROPOSAL.  
+                4. Summarize major strengths (no more than 5 bullet points) related to scientific rigor, technical approach, innovation, and analysis methods found in the PROPOSAL.  
+                5. Summarize major weaknesses (no more than 5 bullet points) related to potential methodological flaws, inadequate uncertainty analysis, incomplete validation, or technical risks in the PROPOSAL.  
+                6. Provide 1–2 minor suggestions (e.g., clarifying assumptions, refining methodologies, addressing technical gaps) to improve the PROPOSAL.    """)
+            
         elif reviewer_name == "Early‑Career Researcher (Innovation & Feasibility Focus)":
             self.system_prompt = (
-                """You are an early-career researcher reviewing an Earth Science proposal for NASA’s ROSES program under Dual-Anonymous Peer Review. Your focus is on innovation and practical feasibility.  
-                1. Employ neutral language (e.g., “the proposed investigation will…”).  
-                2. Assign a score (1–5) for each:  
+                """You are an early-career researcher reviewing a research proposal for NASA's ROSES program under Dual-Anonymous Peer Review. Your focus is on innovation and practical feasibility across NASA's diverse science and technology domains.
+                
+                IMPORTANT: You are reviewing the PROPOSAL document, not the call for proposals. The call document is provided for context only.
+                
+                1. Employ neutral language (e.g., "the proposed investigation will…").  
+                2. Assign a score (1–5) for each criterion based on the PROPOSAL:  
                 a. Scientific/Technical Merit (emphasis on novelty and interdisciplinary integration)  
-                b. Relevance to NASA Objectives (emphasis on advancing scientific priorities)  
+                b. Relevance to NASA Objectives (emphasis on advancing NASA's scientific and technological priorities)  
                 c. Cost Reasonableness (emphasis on efficient resource use)  
-                3. For each criterion, provide a brief rationale (1–2 sentences) focusing on creativity, integration of novel methods, and risk mitigation.  
-                4. List up to 5 major strengths related to innovative aspects, potential for significant breakthroughs, or creative use of data.  
-                5. List up to 5 major weaknesses focused on feasibility concerns, unclear methodologies, or overlooked risks.  
-                6. Offer 1–2 minor recommendations for improving clarity of objectives or reducing technical risk.  
+                3. For each criterion, provide a brief rationale (1–2 sentences) focusing on creativity, integration of novel methods, technological innovation, and risk mitigation as presented in the PROPOSAL.  
+                4. List up to 5 major strengths related to innovative aspects, potential for significant scientific or technological breakthroughs, creative approaches, or novel applications found in the PROPOSAL.  
+                5. List up to 5 major weaknesses focused on feasibility concerns, unclear methodologies, technical risks, or overlooked challenges in the PROPOSAL.  
+                6. Offer 1–2 minor recommendations for improving clarity of objectives, reducing technical risk, or enhancing feasibility in the PROPOSAL.  
             """)
+
         elif reviewer_name == "Program Manager (Programmatic Fit Focus)":
             self.system_prompt = (
-                """You are a NASA program manager reviewing a proposal under Dual-Anonymous Peer Review. Your focus is on cost alignment, budget realism, and programmatic relevance.  
-                1. Use neutral language (e.g., “the proposed investigation will…”).  
-                2. Provide a numeric score (1–5) for:  
+                """You are a NASA program manager reviewing a research proposal under Dual-Anonymous Peer Review for your program. Your focus is on programmatic relevance, and strategic fit.
+                
+                IMPORTANT: You are reviewing the PROPOSAL document, not the call for proposals. The call document is provided for context only.
+                
+                1. Use neutral language (e.g., "the proposed investigation will…").  
+                2. Provide a numeric score (1–5) for each criterion based on the PROPOSAL:  
                 a. Scientific/Technical Merit (briefly, from a programmatic standpoint)  
-                b. Relevance to NASA Objectives (emphasis on alignment with strategic goals)  
-                3. For each criterion, give a concise explanation (1–2 sentences) focusing on budget structure, timeline feasibility, and strategic alignment.  
-                4. Identify up to 5 major strengths related to realistic workplans, justified budget items, or clear milestones.  
-                5. Identify up to 5 major weaknesses such as budget overestimations, unsupported resource requests, or misaligned objectives.
+                b. Relevance to NASA Objectives (emphasis on alignment with NASA's strategic goals and mission priorities)  
+                3. For each criterion, give a concise explanation (1–2 sentences) focusing on budget structure, timeline feasibility, resource allocation, and strategic alignment as presented in the PROPOSAL.  
+                4. Identify up to 5 major strengths related to realistic work plans, justified budget items, clear milestones, appropriate team composition, or strong institutional capabilities in the PROPOSAL.  
+                5. Identify up to 5 major weaknesses such as budget overestimations, unsupported resource requests, unrealistic timelines, inadequate team expertise, or misaligned objectives in the PROPOSAL.
             """)
         else:
             raise ValueError(f"Invalid reviewer name: {reviewer_name}")
         
         self.system_prompt += (
             """
+            REMINDER: Focus your review entirely on the PROPOSAL document. The call document is only provided for context to understand what the proposal is responding to.
+            
             If you can't answer a question based on the provided proposal, just say "N/A". Don't make up information.
 
             **Output Format**:  
@@ -84,9 +97,10 @@ class ReviewerFeedbackService:
         """
         Calls the LLM to generate reviewer feedback.
         """
-        user_content_parts = [f"--- PROPOSAL TEXT ---\n{proposal_text}"]
+        user_content_parts = []
+        user_content_parts.append(f"--- PROPOSAL TEXT TO REVIEW ---\n{proposal_text}")
         if call_text:
-            user_content_parts.append(f"\n\n--- CALL FOR PROPOSAL TEXT ---\n{call_text}")
+            user_content_parts.append(f"\n\n--- CALL FOR PROPOSAL TEXT (FOR CONTEXT ONLY) ---\n{call_text}")
         
         user_content = "\n".join(user_content_parts)
         
@@ -95,7 +109,12 @@ class ReviewerFeedbackService:
             {"role": "user", "content": user_content}
         ]
 
-        raw_response = query(messages=messages, model=self.model_name, client=self.client)
+        # Get the current provider configuration
+        from proposal_analyzer.config import get_llm_provider
+        current_provider = get_llm_provider()
+        
+        raw_response = query(messages=messages, model=self.model_name, client=self.client, provider=current_provider)
+        
         return raw_response.strip()
 
     def generate_feedback(
@@ -206,18 +225,6 @@ if __name__ == '__main__':
             "dummy_proposal.pdf", 
             dummy_call_text
         )
-
-        # print("\n--- Feedback (Proposal Only) ---")
-        # if feedback_results:
-        #     for item in feedback_results:
-        #         print(f"Type: {item['type']}")
-        #         print(f"Service: {item['service_name']}")
-        #         print(f"Snippet: {item['original_snippet']}")
-        #         print(f"Feedback/Suggestion:\n{item['suggestion']}")
-        #         print(f"Explanation: {item['explanation']}")
-        #         print("-" * 20)
-        # else:
-        #     print("No feedback generated.")
 
         print("\n--- Feedback (Proposal + Call Text) ---")
         if feedback_results_with_call:
