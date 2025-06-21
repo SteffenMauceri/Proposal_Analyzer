@@ -112,6 +112,12 @@ def main_cli(
     llm_instructions: Optional[str] = typer.Option(None, "--llm-instructions", "-i", help="Custom instructions for the LLM (for core proposal analysis)."),
     output_format: str = typer.Option("rich", "--output-format", "-of", help="Output format: 'rich' (console) or 'json' or 'pdf'."),
     
+    # LLM Provider options
+    llm_provider: str = typer.Option("openai", "--llm-provider", help="LLM provider to use: 'openai' or 'local'. Overrides environment variable."),
+    local_llm_url: Optional[str] = typer.Option(None, "--local-llm-url", help="Base URL for local LLM API (e.g., https://localhost:8000/v1). Overrides environment variable."),
+    local_llm_model: Optional[str] = typer.Option(None, "--local-llm-model", help="Model name for local LLM. Overrides environment variable."),
+    local_llm_api_key: Optional[str] = typer.Option(None, "--local-llm-api-key", help="API key for local LLM. Overrides environment variable."),
+    
     # New options for selective analysis
     analyze_proposal_opt: bool = typer.Option(True, "--analyze-proposal/--no-analyze-proposal", help="Enable/disable core proposal Q&A analysis."),
     reviewer_feedback_opt: bool = typer.Option(False, "--reviewer-feedback/--no-reviewer-feedback", help="Enable/disable expert reviewer feedback (placeholder)."),
@@ -123,6 +129,18 @@ def main_cli(
       Proposals Dir: data/proposal/
       Questions File: data/Questions.txt
     """
+    # --- Setup LLM Provider Configuration ---
+    import os
+    # Set environment variables if CLI options are provided
+    if llm_provider:
+        os.environ["LLM_PROVIDER"] = llm_provider
+    if local_llm_url:
+        os.environ["LOCAL_LLM_BASE_URL"] = local_llm_url
+    if local_llm_model:
+        os.environ["LOCAL_LLM_MODEL"] = local_llm_model
+    if local_llm_api_key:
+        os.environ["LOCAL_LLM_API_KEY"] = local_llm_api_key
+    
     # --- Setup effective consoles based on output_format ---
     # If output_format is json, all non-data console output goes to stderr.
     # Otherwise, it goes to stdout via the global console objects.
@@ -171,8 +189,24 @@ def main_cli(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Initialize Services ---
-    analysis_service = AnalysisService(project_root=PROJECT_ROOT, model_name='gpt-4o')
-    reviewer_feedback_service = ReviewerFeedbackService(model_name='gpt-4o') # Initialize ReviewerFeedbackService
+    from proposal_analyzer.config import get_llm_provider, get_local_llm_config
+    
+    # Get actual provider configuration
+    current_provider = get_llm_provider()
+    
+    # Determine model names based on provider
+    if current_provider == 'local':
+        local_config = get_local_llm_config()
+        analysis_model = local_config["model_name"]
+        reviewer_model = local_config["model_name"]
+        effective_info_console.print(f"Using Local LLM: {local_config['model_name']} at {local_config['base_url']}")
+    else:
+        analysis_model = 'gpt-4o'
+        reviewer_model = 'gpt-4o'
+        effective_info_console.print(f"Using OpenAI models: {analysis_model}")
+    
+    analysis_service = AnalysisService(project_root=PROJECT_ROOT, model_name=analysis_model)
+    reviewer_feedback_service = ReviewerFeedbackService(model_name=reviewer_model) # Initialize ReviewerFeedbackService
     # PDFExportService is initialized when needed, per proposal.
 
     # --- Main Processing Loop ---

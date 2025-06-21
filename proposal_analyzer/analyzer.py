@@ -40,7 +40,10 @@ def analyze(
     
     results: List[Dict[str, Any]] = []
     
-    llm_call_for_evaluate = partial(ask_llm, model=model, client=llm_client_instance)
+    # Get the current provider configuration to ensure correct LLM is used
+    from .config import get_llm_provider
+    current_provider = get_llm_provider()
+    llm_call_for_evaluate = partial(ask_llm, model=model, client=llm_client_instance, provider=current_provider)
     
     for q_text in tqdm(questions, desc="Evaluating questions", unit="question"):
         results.append(evaluate(question=q_text, context=ctx, ask=llm_call_for_evaluate, instructions=instructions))

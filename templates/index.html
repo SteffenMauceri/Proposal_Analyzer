@@ -66,12 +66,41 @@
         .feedback-content p {
             margin-bottom: 0.8em;
         }
+        
+        /* Model display styles */
+        .model-display {
+            background-color: #f0f8ff;
+            border: 1px solid #4CAF50;
+            border-radius: 5px;
+            padding: 8px 12px;
+            margin: 10px 0;
+            display: inline-block;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        .model-display.local-llm {
+            background-color: #e8f5e8;
+            border-color: #4CAF50;
+            color: #2e7d32;
+        }
+        .model-display.openai-llm {
+            background-color: #fff3e0;
+            border-color: #ff9800;
+            color: #e65100;
+        }
+        .model-display-icon {
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>Proposal Analyzer v0.1</h1>
+            <div class="model-display {{ model_display_class }}">
+                <span class="model-display-icon">🤖</span>
+                Current Model: {{ model_display_name }}
+            </div>
         </header>
 
         <main>

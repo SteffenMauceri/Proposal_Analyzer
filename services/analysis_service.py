@@ -66,6 +66,17 @@ class AnalysisService:
             base_command.append('--reviewer-feedback')
         # else: base_command.append('--no-reviewer-feedback')
         
+        # Add LLM provider configuration to the command
+        from proposal_analyzer.config import get_llm_provider, get_local_llm_config
+        current_provider = get_llm_provider()
+        base_command.extend(['--llm-provider', current_provider])
+        
+        if current_provider == 'local':
+            local_config = get_local_llm_config()
+            base_command.extend(['--local-llm-url', local_config['base_url']])
+            base_command.extend(['--local-llm-model', local_config['model_name']])
+            base_command.extend(['--local-llm-api-key', local_config['api_key']])
+        
         # Removed the old --selected-proposal logic that caused the error.
         # if selected_proposal_filenames and not ('--proposal-pdf' in base_command):
         #     for p_filename in selected_proposal_filenames:
@@ -295,7 +306,10 @@ class AnalysisService:
             }
             
             results: List[Dict[str, Any]] = []
-            llm_call_for_evaluate = partial(ask_llm, model=self.model_name, client=None)
+            # Get the current provider configuration
+            from proposal_analyzer.config import get_llm_provider
+            current_provider = get_llm_provider()
+            llm_call_for_evaluate = partial(ask_llm, model=self.model_name, client=None, provider=current_provider)
             
             # Process each question
             for q_text in questions:

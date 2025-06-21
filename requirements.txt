@@ -11,4 +11,5 @@ tqdm>=4.60.0 # Included in dev plan, but not actively used yet
 Flask
 python-dotenv
 reportlab
-gunicorn 
+gunicorn
+httpx>=0.24.0  # Required for local LLM support with custom SSL settings 

@@ -44,22 +44,74 @@ This is a web-based tool to analyze PDF proposal documents. You can upload a pro
     pip install -r requirements.txt
     ```
 
-4.  **Set up your OpenAI API Key:**
-    This project uses the OpenAI API. You need to have an API key from OpenAI.
+4.  **Set up your LLM Provider:**
+    This project supports both OpenAI and local LLM providers.
 
-    **Option A: Environment Variable (recommended for production):**
+    ### Option A: OpenAI (Default)
+    You need to have an API key from OpenAI.
+
+    **Environment Variable (recommended for production):**
     ```bash
     export OPENAI_API_KEY="your-openai-api-key"
     ```
     
-    **Option B: .env file:**
+    **.env file:**
     Create a file named `.env` in the root of the project and add your API key:
     ```
     OPENAI_API_KEY="your-openai-api-key"
     ```
     
-    **Option C: Text file:**
+    **Text file:**
     Create a file named `key.txt` in the root of the project with your API key.
+
+    ### Option B: Local LLM
+    You can use a local LLM server (e.g., Ollama, vLLM, or other OpenAI-compatible API).
+
+    **Environment Variables:**
+    ```bash
+    export LLM_PROVIDER="local"
+    export LOCAL_LLM_BASE_URL="https://your-local-llm-server.com/v1"
+    export LOCAL_LLM_API_KEY="your-local-api-key"
+    export LOCAL_LLM_MODEL="your-model-name"
+    export LOCAL_LLM_VERIFY_SSL="false"  # Set to true if using HTTPS with valid certificates
+    ```
+
+    **Command Line Options:**
+    You can also specify the provider via command line:
+    ```bash
+    python main.py --llm-provider=local --local-llm-url="https://your-server.com/v1" --local-llm-model="gemma3:27b-it-qat"
+    ```
+
+    **Example: NASA JPL Local LLM Setup:**
+    ```bash
+    export LLM_PROVIDER="local"
+    export LOCAL_LLM_BASE_URL="https://chathpc.jpl.nasa.gov/ollama/v1"
+    export LOCAL_LLM_API_KEY="sk-c4c4a140130d4e5881765751f2382191"
+    export LOCAL_LLM_MODEL="gemma3:27b-it-qat"
+    export LOCAL_LLM_VERIFY_SSL="false"
+    ```
+
+    **Testing Local LLM:**
+    Use the provided test script to verify your local LLM setup:
+    ```bash
+    python test_local_llm.py
+    ```
+
+    **Command Line Examples:**
+    ```bash
+    # Use local LLM for analysis
+    python main.py --llm-provider=local --analyze-proposal --reviewer-feedback
+    
+    # Use OpenAI (default)
+    python main.py --llm-provider=openai --analyze-proposal --reviewer-feedback
+    
+    # Override local LLM settings via command line
+    python main.py --llm-provider=local \
+      --local-llm-url="https://chathpc.jpl.nasa.gov/ollama/v1" \
+      --local-llm-model="gemma3:27b-it-qat" \
+      --local-llm-api-key="your-key" \
+      --analyze-proposal
+    ```
 
 ### Running the Application
 

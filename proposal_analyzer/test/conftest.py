@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 from typing import List, Dict, Any, Callable
 
-@pytest.fixture(scope=\"session\")
+@pytest.fixture(scope="session")
 def data_dir(tmp_path_factory) -> Path:
     # Using a temporary directory for test data is good practice,
     # but the user specified creating files in proposal_analyzer/test/data.

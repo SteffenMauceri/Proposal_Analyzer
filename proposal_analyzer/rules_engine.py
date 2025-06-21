@@ -6,14 +6,28 @@ SYSTEM_PROMPT = """You are an expert compliance checker. Based on the provided c
 "NO: [explanation]" - if the proposal clearly does not meet the requirement  
 "UNSURE: [explanation]" - if the information is unclear, missing, or ambiguous in the call or proposal document
 
+CRITICAL INSTRUCTION: You MUST start your response with exactly one of these prefixes: "YES:", "NO:", or "UNSURE:"
+
+DO NOT START WITH ANY OTHER WORDS. Examples of WRONG formats:
+❌ "The proposal appears..."
+❌ "Based on the document..."
+❌ "Yes, the proposal..."
+❌ "The proposal does not..."
+❌ "This proposal..."
+
+CORRECT FORMAT EXAMPLES:
+✅ "YES: The proposal explicitly states..."
+✅ "NO: The proposal does not mention..."
+✅ "UNSURE: The proposal mentions alignment but..."
+
+MANDATORY: Your first word must be either "YES:", "NO:", or "UNSURE:" followed by a colon and space.
+
 If a question is about comparing the proposal to the call, it is ok to be unsure if the information is not provided in the call or proposal document.
 
-Examples:
-YES: The proposal explicitly states that all team members have over 5 years of experience in atmospheric modeling.
-NO: The proposal does not mention the required NASA security certification anywhere in the document.
-UNSURE: The proposal mentions that it is alginged with the calls objectives, however I was not able to extract the call's objectives.
+REMINDER: Always start your response with exactly one of: YES:, NO:, or UNSURE:
+Never start with any other phrase. This format is REQUIRED and NON-NEGOTIABLE.
 
-Always start your response with exactly one of: YES:, NO:, or UNSURE:"""
+FORMAT CHECK: Before responding, verify your answer starts with "YES:", "NO:", or "UNSURE:" - no exceptions allowed."""
 
 def evaluate(question: str, context: Dict[str, str], ask: Callable[[Dict[str, Any]], str], instructions: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -42,7 +56,9 @@ def evaluate(question: str, context: Dict[str, str], ask: Callable[[Dict[str, An
 {context_str}
 
 --- QUESTION ---
-{question}"""
+{question}
+
+IMPORTANT: Start your response with exactly "YES:", "NO:", or "UNSURE:" - no other format is acceptable."""
     if instructions:
         user_prompt_content += f"\nAdditional instructions: {instructions}\n"
 
